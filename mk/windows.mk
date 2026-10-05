@@ -37,6 +37,7 @@ override SDL_BACKEND := sdl3
 
 OUT ?= build/win64
 TARGET := $(OUT)/libX11-compat.dll
+SHLIB := .dll
 EXE := .exe
 
 # Cross-built SDL3 / SDL3_ttf / pixman (mk/windows-deps.mk). Deterministic

@@ -1,5 +1,8 @@
 OUT ?= build
 TARGET ?= $(OUT)/libX11-compat.so
+# Shared-library suffix of the compat toolkit libraries (.dll under
+# WINDOWS=1, see mk/windows.mk).
+SHLIB ?= .so
 
 # GLX ?= 1 builds the optional GLX-over-EGL layer (src/glx.c + src/egl-wrapper.c)
 # and exports the glX* symbols. Set GLX=0 to compile it out entirely: the glX*

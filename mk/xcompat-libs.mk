@@ -3,17 +3,17 @@
 # core archive (Xext's XShape family via src/xshape.c, Xft via src/xft.c), so a
 # wasm app resolves them from libX11-compat.a and a separate archive would only
 # collide at static-link time.
-XEXT_COMPAT_TARGET := $(OUT)/libXext-compat.so
+XEXT_COMPAT_TARGET := $(OUT)/libXext-compat$(SHLIB)
 ifeq ($(WASM),1)
 XMU_COMPAT_TARGET  := $(OUT)/libXmu-compat.a
 else
-XMU_COMPAT_TARGET  := $(OUT)/libXmu-compat.so
+XMU_COMPAT_TARGET  := $(OUT)/libXmu-compat$(SHLIB)
 endif
-XINERAMA_COMPAT_TARGET := $(OUT)/libXinerama-compat.so
-XI_COMPAT_TARGET := $(OUT)/libXi-compat.so
-ICE_COMPAT_TARGET := $(OUT)/libICE-compat.so
-SM_COMPAT_TARGET := $(OUT)/libSM-compat.so
-XFT_COMPAT_TARGET := $(OUT)/libXft-compat.so
+XINERAMA_COMPAT_TARGET := $(OUT)/libXinerama-compat$(SHLIB)
+XI_COMPAT_TARGET := $(OUT)/libXi-compat$(SHLIB)
+ICE_COMPAT_TARGET := $(OUT)/libICE-compat$(SHLIB)
+SM_COMPAT_TARGET := $(OUT)/libSM-compat$(SHLIB)
+XFT_COMPAT_TARGET := $(OUT)/libXft-compat$(SHLIB)
 XEXT_COMPAT_LDFLAGS := $(call shared_lib_rpath_ldflags,$(notdir $(XEXT_COMPAT_TARGET)))
 XMU_COMPAT_LDFLAGS  := $(call shared_lib_rpath_ldflags,$(notdir $(XMU_COMPAT_TARGET)))
 XINERAMA_COMPAT_LDFLAGS := $(call shared_lib_rpath_ldflags,$(notdir $(XINERAMA_COMPAT_TARGET)))

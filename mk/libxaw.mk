@@ -8,7 +8,7 @@ LIBXAW_OBJ_DIR := $(OUT)/libxaw-wasm
 LIBXAW_TARGET := $(OUT)/libXaw-compat.a
 else
 LIBXAW_OBJ_DIR := $(OUT)/libxaw
-LIBXAW_TARGET := $(OUT)/libXaw-compat.so
+LIBXAW_TARGET := $(OUT)/libXaw-compat$(SHLIB)
 endif
 
 UPSTREAM_HEADERS_DIR ?= $(OUT)/upstream/include

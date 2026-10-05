@@ -8,7 +8,7 @@ LIBXPM_OBJ_DIR := $(OUT)/libxpm-wasm
 LIBXPM_TARGET  := $(OUT)/libXpm-compat.a
 else
 LIBXPM_OBJ_DIR := $(OUT)/libxpm
-LIBXPM_TARGET  := $(OUT)/libXpm-compat.so
+LIBXPM_TARGET  := $(OUT)/libXpm-compat$(SHLIB)
 endif
 
 LIBXPM_SRC_BASES := \

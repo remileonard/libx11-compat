@@ -29,7 +29,7 @@ LIBXT_HOST_DIR    := $(OUT)/host
 ifeq ($(WASM),1)
 LIBXT_TARGET      := $(OUT)/libXt-compat.a
 else
-LIBXT_TARGET      := $(OUT)/libXt-compat.so
+LIBXT_TARGET      := $(OUT)/libXt-compat$(SHLIB)
 endif
 LIBXT_PATCHES     := $(sort $(wildcard compat/libxt-patches/*.patch))
 LIBXT_PATCH_LIST_FILE := $(OUT)/upstream/.libxt-patch-list
