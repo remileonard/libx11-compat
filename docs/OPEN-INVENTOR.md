@@ -139,9 +139,74 @@ render gate.
   drawn.
 - Spaceball and dial-box input devices report as absent.
 
+## Roadmap: one SDL3 GL backend for Linux, macOS and Windows
+
+The direct path is not Linux-specific. On every platform the application's
+`gl*` can go straight to the native desktop OpenGL; the GLX layer only has to
+create contexts, bind drawables and present. Only the plumbing differs:
+
+| | Linux (done) | macOS | Windows |
+|---|---|---|---|
+| context | EGL (Mesa) | CGL | WGL |
+| client links `gl*` from | `libOpenGL` (GLVND) | `OpenGL.framework` | `opengl32.dll` |
+| legacy GL 1.x | Mesa compatibility profile | legacy 2.1 profile | driver compatibility profile |
+| GLU | built in-tree | `OpenGL.framework` | `glu32.dll` |
+
+SDL3 already wraps all three (`SDL_GL_*`: WGL, CGL, EGL), including the
+compatibility profile (`SDL_GL_CONTEXT_PROFILE_COMPATIBILITY`, which is the
+legacy 2.1 profile on macOS). One GLX backend on SDL3 can therefore replace
+per-OS backends:
+
+| GLX | SDL3 |
+|---|---|
+| `glXChooseVisual` / FBConfigs | `SDL_GL_SetAttribute` (sizes, double buffer, profile) |
+| `glXCreateContext` (+ share list) | `SDL_GL_CreateContext` (`SDL_GL_SHARE_WITH_CURRENT_CONTEXT`) |
+| `glXMakeCurrent` | `SDL_GL_MakeCurrent` |
+| `glXSwapBuffers` | `SDL_GL_SwapWindow` |
+| `glXGetProcAddress` | `SDL_GL_GetProcAddress` |
+
+**GL subwindows as native children.** libx11-compat gives an SDL window only to
+top-level and override-redirect X windows (`realizeTopLevelWindow` in
+`src/window.c`). Motif menus and dialogs are therefore already separate OS
+windows, while child X windows are composited into their top-level. A GL child
+window (`GLwDrawingArea`, the `SoXt` render area) instead gets a native child
+surface inside its top-level's SDL window:
+- an `NSView` subview on macOS;
+- a `WS_CHILD` `HWND` on Windows;
+- an X11 child window;
+- a `wl_subsurface` on Wayland.
+
+That surface is wrapped with `SDL_CreateWindowWithProperties`
+(`SDL_PROP_WINDOW_CREATE_COCOA_VIEW_POINTER`, `..._WIN32_HWND_POINTER`,
+`..._X11_WINDOW_NUMBER`, `..._WAYLAND_WL_SURFACE_POINTER`, plus the OpenGL
+flag), and the context is created on it. That gives:
+- a real default framebuffer with front and back buffers, so
+  `glDrawBuffer(GL_FRONT/GL_BACK)` and front-buffer frames work, and
+  `compat/open-inventor-patches/0002` becomes unnecessary;
+- GPU presentation with no per-frame `glReadPixels`;
+- HiDPI handled by the OS.
+
+The work:
+- keep the native child in step with its X window: geometry on
+  `ConfigureNotify`, hidden when it or an ancestor is unmapped, clipped by its
+  ancestors;
+- make it input-transparent, so pointer and keyboard keep flowing through the
+  existing X event path (`hitTest:` returning nil, `HTTRANSPARENT`, an empty
+  Wayland input region, an empty X input shape);
+- accept that a non-GL X sibling overlapping the GL area is hidden under it
+  (rare).
+
+**Headless stays on readback.** With the dummy video driver, or for snapshots,
+there is no native surface, so the current offscreen-render-and-composite
+path stays as the fallback, as the CI render gates need.
+
+EGL stays for headless Linux (surfaceless Mesa), ANGLE and WebAssembly. The
+per-OS sections below keep only what is specific to each platform.
+
 ## Roadmap: macOS (native OpenGL through CGL)
 
-On macOS the GLX layer currently runs on ANGLE: EGL over Metal, GLES only,
+The SDL3 GL backend above covers the CGL plumbing; what follows records the
+macOS specifics and a CGL-only fallback design. On macOS the GLX layer currently runs on ANGLE: EGL over Metal, GLES only,
 with desktop GL translated by gl4es. That suits GL 2.x-style code, but not Open
 Inventor, which needs the legacy GL 1.x surface (`GL_SELECT` picking,
 `GL_FEEDBACK`, display lists, the attribute stack) that gl4es covers only
