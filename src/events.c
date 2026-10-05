@@ -1,6 +1,5 @@
 #include <stdatomic.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -48,6 +47,7 @@ EM_JS(int, popBrowserDomQueue, (int *item), {
 #include "snapshot.h"
 #include "state-snapshot.h"
 #include "timeline.h"
+#include "event-pipe.h"
 
 static int eventFds[2] = {-1, -1};
 #define READ_EVENT_FD eventFds[0]
@@ -265,7 +265,7 @@ static void consumePumpWakeByte(void)
     if (READ_EVENT_FD < 0 || !SDL_AtomicGet(&pumpWakePending))
         return;
     char buffer;
-    if (read(READ_EVENT_FD, &buffer, sizeof(buffer)) ==
+    if (eventPipeRead(READ_EVENT_FD, &buffer, sizeof(buffer)) ==
         (ssize_t) sizeof(buffer))
         SDL_AtomicSet(&pumpWakePending, 0);
 }
@@ -334,7 +334,8 @@ static Uint32 xtWakeTimerCallback(XC_TIMER_CALLBACK_PARAMS)
 
     if (SDL_AtomicCAS(&pumpWakePending, 0, 1)) {
         char buffer = 'e';
-        if (write(WRITE_EVENT_FD, &buffer, sizeof(buffer)) != sizeof(buffer))
+        if (eventPipeWrite(WRITE_EVENT_FD, &buffer, sizeof(buffer)) !=
+            sizeof(buffer))
             SDL_AtomicSet(&pumpWakePending, 0);
     }
     return interval;
@@ -427,7 +428,7 @@ static void setDisplayEventQueueLength(Display *display, int qlen)
 static void discardPipeWakeups(void)
 {
     char buffer[64];
-    while (read(READ_EVENT_FD, buffer, sizeof(buffer)) > 0)
+    while (eventPipeRead(READ_EVENT_FD, buffer, sizeof(buffer)) > 0)
         ; /* drain */
 }
 
@@ -443,7 +444,7 @@ static void writePipeWakeBytes(int count)
         size_t chunk = (size_t) count;
         if (chunk > sizeof(buffer))
             chunk = sizeof(buffer);
-        ssize_t written = write(WRITE_EVENT_FD, buffer, chunk);
+        ssize_t written = eventPipeWrite(WRITE_EVENT_FD, buffer, chunk);
         if (written <= 0)
             break;
         count -= (int) written;
@@ -477,24 +478,24 @@ static void resetEventWakeups(Display *display, int qlen)
  * discard-then-rewrite, which takes the same lock. Both fds are non-blocking,
  * so holding the lock across the write/read never stalls.
  */
-#define ENQUEUE_EVENT_IN_PIPE(display)                       \
-    do {                                                     \
-        lockEventQueueLength();                              \
-        char _b = 'e';                                       \
-        ssize_t _w = write(WRITE_EVENT_FD, &_b, sizeof(_b)); \
-        (void) _w;                                           \
-        GET_DISPLAY(display)->qlen++;                        \
-        unlockEventQueueLength();                            \
+#define ENQUEUE_EVENT_IN_PIPE(display)                                \
+    do {                                                              \
+        lockEventQueueLength();                                       \
+        char _b = 'e';                                                \
+        ssize_t _w = eventPipeWrite(WRITE_EVENT_FD, &_b, sizeof(_b)); \
+        (void) _w;                                                    \
+        GET_DISPLAY(display)->qlen++;                                 \
+        unlockEventQueueLength();                                     \
     } while (0)
-#define READ_EVENT_IN_PIPE(display)                        \
-    do {                                                   \
-        lockEventQueueLength();                            \
-        char _b;                                           \
-        ssize_t _r = read(READ_EVENT_FD, &_b, sizeof(_b)); \
-        (void) _r;                                         \
-        if (GET_DISPLAY(display)->qlen > 0)                \
-            GET_DISPLAY(display)->qlen--;                  \
-        unlockEventQueueLength();                          \
+#define READ_EVENT_IN_PIPE(display)                                 \
+    do {                                                            \
+        lockEventQueueLength();                                     \
+        char _b;                                                    \
+        ssize_t _r = eventPipeRead(READ_EVENT_FD, &_b, sizeof(_b)); \
+        (void) _r;                                                  \
+        if (GET_DISPLAY(display)->qlen > 0)                         \
+            GET_DISPLAY(display)->qlen--;                           \
+        unlockEventQueueLength();                                   \
     } while (0)
 
 void libx11CompatSideQueueEventRemoved(SDL_EventFilter filter, void *userdata)
@@ -2303,23 +2304,14 @@ int initEventPipe(Display *display)
     Bool isFirstDisplay = trackedDisplays.length == 0;
     unlockTrackedDisplays();
     if (isFirstDisplay) {
-        if (pipe(eventFds) == -1) {
+        /* Non-blocking wake pipe (a loopback socket pair on Windows); see
+         * event-pipe.h.
+         */
+        if (eventPipeCreate(eventFds) == -1) {
             LOG("Could not create the event pipe: %s", strerror(errno));
             SDL_AtomicUnlock(&eventPipeGlobalLock);
             return -1;
         }
-
-        /* Real X11 clients select() / poll() on the connection FD then call
-         * XNextEvent in a non-blocking mode. The pipe is just a wake-up signal;
-         * reads happen inside XNextEvent itself, so make the FD non-blocking so
-         * a desynced qlen does not stall the whole event loop on a missing
-         * byte. The original spelling used F_SETFD (FD_CLOEXEC) instead of
-         * F_SETFL (O_NONBLOCK), silently leaving the FD in blocking mode.
-         */
-        int flags = fcntl(READ_EVENT_FD, F_GETFL);
-        fcntl(READ_EVENT_FD, F_SETFL, flags | O_NONBLOCK);
-        flags = fcntl(WRITE_EVENT_FD, F_GETFL);
-        fcntl(WRITE_EVENT_FD, F_SETFL, flags | O_NONBLOCK);
     }
     int qlen;
     getEventQueueLength(&qlen);
@@ -2405,11 +2397,11 @@ void closeEventPipe(Display *display)
          * ones instead of leaking them.
          */
         if (READ_EVENT_FD >= 0) {
-            close(READ_EVENT_FD);
+            eventPipeClose(READ_EVENT_FD);
             READ_EVENT_FD = -1;
         }
         if (WRITE_EVENT_FD >= 0) {
-            close(WRITE_EVENT_FD);
+            eventPipeClose(WRITE_EVENT_FD);
             WRITE_EVENT_FD = -1;
         }
     }

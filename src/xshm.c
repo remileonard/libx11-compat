@@ -144,7 +144,13 @@ static Bool queueShmCompletion(Display *dpy,
 Bool XShmQueryExtension(Display *dpy)
 {
     (void) dpy;
+#ifdef _WIN32
+    /* No System V shared memory on Windows (see compat/win32/include/sys/
+     * shm.h): report MIT-SHM absent so clients use plain XPutImage. */
+    return False;
+#else
     return True;
+#endif
 }
 
 int XShmGetEventBase(Display *dpy)

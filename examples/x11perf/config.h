@@ -2,6 +2,7 @@
 #ifndef LIBX11_COMPAT_EXAMPLES_X11PERF_CONFIG_H
 #define LIBX11_COMPAT_EXAMPLES_X11PERF_CONFIG_H
 
+#include <stdint.h> /* int64_t in x11perf.h; glibc only provides it implicitly */
 #include <sys/time.h>
 
 #define PACKAGE_STRING "x11perf upstream master"

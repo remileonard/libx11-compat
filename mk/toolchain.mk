@@ -2,7 +2,9 @@
 
 MAKEFLAGS += --no-builtin-rules --no-builtin-variables
 
-UNAME_S := $(shell uname -s)
+# WINDOWS=1 (mk/windows.mk) cross-builds for Windows: describe the target, not
+# the build machine, so the Linux/Darwin link branches stay off.
+UNAME_S := $(if $(filter 1,$(WINDOWS)),Windows,$(shell uname -s))
 
 # GNU make predefines CC=cc. Prefer clang when it is on PATH (the tree's
 # primary toolchain and macOS's system compiler), but fall back to the system
@@ -17,6 +19,7 @@ else
 endif
 
 PKG_CONFIG ?= pkg-config
+NM ?= nm
 # SDL2_CONFIG and all SDL detection live in mk/sdl.mk.
 PYTHON ?= python3
 SHFMT ?= shfmt

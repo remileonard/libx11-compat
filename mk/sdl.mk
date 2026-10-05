@@ -36,6 +36,15 @@ SDL_CPPFLAGS := $(SDL_PORT_FLAGS)
 SDL_COMPAT_LIBS := $(SDL_PORT_FLAGS)
 SDL_RUNTIME_LIBDIR :=
 
+else ifeq ($(WINDOWS),1)
+
+# Windows: SDL3 + SDL3_ttf cross-built into the private sysroot by
+# mk/windows-deps.mk (deterministic paths; no parse-time pkg-config).
+SDL_CPPFLAGS := -I$(WIN_SYSROOT)/include -DLIBX11_COMPAT_SDL3
+SDL_COMPAT_LIBS := -L$(WIN_SYSROOT)/lib -lSDL3_ttf -lSDL3
+SDL_RUNTIME_LIBDIR := $(WIN_SYSROOT)/bin
+SDL_USE_WRAPPER := 0
+
 else # native (host SDL2 or SDL3)
 
 ifeq ($(origin SDL_BACKEND),undefined)

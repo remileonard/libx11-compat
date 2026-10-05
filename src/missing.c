@@ -814,6 +814,17 @@ int _XGetHostname(char *buf, int maxlen)
         len = maxlen - 1;
     strncpy(buf, name.nodename, (size_t) len);
     buf[len] = '\0';
+#elif defined(_WIN32)
+    /* gethostname() is Winsock's and needs WSAStartup; the computer name the
+     * system exports in the environment is the same NetBIOS name. */
+    const char *host = getenv("COMPUTERNAME");
+
+    if (maxlen <= 0 || !buf)
+        return 0;
+
+    strncpy(buf, host ? host : "", (size_t) maxlen);
+    buf[maxlen - 1] = '\0';
+    len = (int) strlen(buf);
 #else
     if (maxlen <= 0 || !buf)
         return 0;

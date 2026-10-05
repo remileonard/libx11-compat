@@ -17,6 +17,7 @@
 #     toolchain.mk applies the native compiler default. wasm-deps.mk comes
 #     after the object list is defined (it links the wasm archive/clock).
 include mk/wasm.mk
+include mk/windows.mk
 include mk/toolchain.mk
 include mk/config.mk
 include mk/sdl.mk
@@ -56,6 +57,7 @@ include mk/open-inventor.mk
 include mk/tests.mk
 include mk/examples.mk
 include mk/wasm-deps.mk
+include mk/windows-deps.mk
 include mk/wasm-motif.mk
 include mk/wasm-apps.mk
 include mk/wasm-mosaic.mk

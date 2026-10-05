@@ -26,6 +26,10 @@ ifeq ($(WASM),1)
 # and guarantees no host pixman can leak in.
 PIXMAN_CFLAGS := -I$(WASM_SYSROOT)/include/pixman-1
 PIXMAN_LIBS := -L$(WASM_SYSROOT)/lib -lpixman-1
+else ifeq ($(WINDOWS),1)
+# Static pixman cross-built into the Windows sysroot (mk/windows-deps.mk).
+PIXMAN_CFLAGS := -I$(WIN_SYSROOT)/include/pixman-1
+PIXMAN_LIBS := -L$(WIN_SYSROOT)/lib -lpixman-1
 else
 PIXMAN_CFLAGS := $(shell $(PKG_CONFIG) --cflags pixman-1 2>/dev/null)
 PIXMAN_LIBS := $(shell $(PKG_CONFIG) --libs pixman-1 2>/dev/null)
@@ -111,6 +115,7 @@ LDLIBS += $(SDL_COMPAT_LIBS) $(PIXMAN_LIBS) -lm
 ifneq ($(WASM),1)
 LDLIBS += -pthread \
           $(if $(filter Linux,$(UNAME_S)),-ldl) \
+          $(if $(filter Windows,$(UNAME_S)),-lws2_32 -lpsapi) \
           $(if $(filter Darwin,$(UNAME_S)),-framework CoreFoundation) \
           $(if $(filter Darwin,$(UNAME_S)),-lobjc)
 endif
@@ -120,3 +125,9 @@ BLUE   := \033[0;34m
 YELLOW := \033[1;33m
 RED    := \033[0;31m
 RESET  := \033[0m
+
+# Windows: POSIX headers MinGW lacks (<dlfcn.h>, <sys/ipc.h>, <sys/shm.h>) come
+# from compat/win32/include; mk/sources.mk adds their implementations.
+ifeq ($(WINDOWS),1)
+CPPFLAGS += -Icompat/win32/include -include x11compat-win32.h
+endif

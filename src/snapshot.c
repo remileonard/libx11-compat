@@ -348,10 +348,24 @@ int snapshotHandleEvent(const SDL_Event *event)
         goto signal;
     }
     drawWindowDataToScreen();
-    SDL_Surface *surface = SDL_GetWindowSurface(win);
+
+    /* A window on the accelerated present path must never touch
+     * SDL_GetWindowSurface (it is mutually exclusive with the per-window
+     * renderer, see WindowStruct.presentRenderer). Some backends refuse the
+     * call, but others (SDL3 on Windows) hand back a separate, never-presented
+     * framebuffer, which would save a black image. Read the X window's pixels
+     * back from the backing renderer instead.
+     */
+    Window targetWindow = getWindowFromId(winId);
+    WindowStruct *targetStruct =
+        targetWindow != None ? GET_WINDOW_STRUCT(targetWindow) : NULL;
+    Bool accelerated = targetStruct && targetStruct->presentRenderer &&
+                       !targetStruct->presentUsesSoftware;
+    SDL_Surface *surface = accelerated ? NULL : SDL_GetWindowSurface(win);
     if (!surface) {
-        LOG("snapshot: SDL_GetWindowSurface failed: %s\n", SDL_GetError());
-        Window xwin = getWindowFromId(winId);
+        if (!accelerated)
+            LOG("snapshot: SDL_GetWindowSurface failed: %s\n", SDL_GetError());
+        Window xwin = targetWindow;
         if (xwin != None) {
             SDL_Renderer *renderer = getWindowRenderer(xwin);
             WindowStruct *windowStruct = GET_WINDOW_STRUCT(xwin);
@@ -405,7 +419,7 @@ int snapshotHandleEvent(const SDL_Event *event)
         rc = -3;
         goto signal;
     }
-    if (rename(tmpPath, path) != 0) {
+    if (compatRenameReplace(tmpPath, path) != 0) {
         LOG("snapshot: rename(%s -> %s) failed: %s\n", tmpPath, path,
             strerror(errno));
         free(tmpPath);

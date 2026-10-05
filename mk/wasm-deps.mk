@@ -14,6 +14,12 @@ WASM_EXAMPLES := paint life clock mandel processing clipboard catclock moire
 # Defined outside the WASM guard so the check-wasm-prereqs diagnostic (runnable
 # from a normal make) can report the pinned version and staged-archive path.
 PIXMAN_VERSION := 0.42.2
+# The pinned source archive and its digest are shared with the Windows leg
+# (mk/windows-deps.mk), so they live outside the WASM guard too; see the
+# fetch-and-verify notes below.
+PIXMAN_WASM_SHA256 := 4191a5084bae000a61e3513b06027b6f8f559d17d61769ed9de27dfb0cec8699
+PIXMAN_WASM_URLS ?= \
+    https://gitlab.freedesktop.org/pixman/pixman/-/archive/pixman-$(PIXMAN_VERSION)/pixman-pixman-$(PIXMAN_VERSION).tar.gz
 
 # Defined outside the WASM guard so check-wasm-fixed-font-property (a normal-make
 # target that recurses with WASM=1 to build it) passes a real path to node
@@ -37,9 +43,6 @@ ifeq ($(WASM),1)
 # (autoconf/automake/libtool). The pinned digest is that archive's, not the
 # cairographics release tarball's (different bytes).
 WASM_DEP_DIR := $(OUT)/wasm-deps
-PIXMAN_WASM_SHA256 := 4191a5084bae000a61e3513b06027b6f8f559d17d61769ed9de27dfb0cec8699
-PIXMAN_WASM_URLS ?= \
-    https://gitlab.freedesktop.org/pixman/pixman/-/archive/pixman-$(PIXMAN_VERSION)/pixman-pixman-$(PIXMAN_VERSION).tar.gz
 # Offline or air-gapped build: pass PIXMAN_WASM_TARBALL=/path/to/pixman.tar.gz
 # to skip the network fetch. It is digest-checked like any mirror.
 PIXMAN_WASM_TARBALL ?=

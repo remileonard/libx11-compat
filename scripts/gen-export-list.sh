@@ -16,7 +16,7 @@
 # default, and a silent no-op only under GNU ld. Pinning to the defined set
 # keeps every linker happy without per-platform manifests.
 #
-# Usage: gen-export-list.sh <elf|macho> <glx:0|1> <defined-syms> <manifest>...
+# Usage: gen-export-list.sh <elf|macho|pe> <glx:0|1> <defined-syms> <manifest>...
 set -eu
 
 # comm below needs both inputs collated identically to the sort that produced
@@ -69,6 +69,12 @@ case "$format" in
         printf '{\n  global:\n'
         printf '%s\n' "$syms" | grep -v '^$' | sed 's/^/    /; s/$/;/'
         printf '  local:\n    *;\n};\n'
+        ;;
+    pe)
+        # PE module-definition (.def) file for a Windows DLL: the named
+        # globals are exported, everything else stays internal.
+        printf 'EXPORTS\n'
+        printf '%s\n' "$syms" | grep -v '^$' | sed 's/^/    /'
         ;;
     *)
         echo "gen-export-list.sh: unknown format '$format'" >&2

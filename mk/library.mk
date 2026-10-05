@@ -57,6 +57,14 @@ ifeq ($(UNAME_S),Linux)
   LDFLAGS_LIB_COMMON += -Wl,-Bsymbolic
   LDFLAGS_LIB_PIN := -Wl,--version-script=$(X11_EXPORT_LIST) -Wl,--gc-sections
 endif
+ifeq ($(UNAME_S),Windows)
+  # PE: a module-definition file pins the DLL exports, and the import library
+  # (libX11-compat.dll.a) is what clients link.
+  X11_EXPORT_LIST := $(OUT)/libX11-compat.def
+  X11_EXPORT_FORMAT := pe
+  X11_IMPLIB := $(OUT)/libX11-compat.dll.a
+  LDFLAGS_LIB_PIN := $(X11_EXPORT_LIST) -Wl,--out-implib,$(X11_IMPLIB) -Wl,--gc-sections
+endif
 ifeq ($(UNAME_S),Darwin)
   X11_EXPORT_LIST := $(OUT)/libX11-compat.exports
   X11_EXPORT_FORMAT := macho
@@ -81,7 +89,7 @@ $(X11_LINK_CONFIG): FORCE | $(OUT)
 X11_EXPORT_DEFINED := $(OUT)/libX11-compat.defined-syms
 $(X11_EXPORT_DEFINED): $(OBJS) $(X11_LINK_CONFIG) | $(OUT)
 	@echo "  GEN     $@"
-	$(Q)nm -g $(OBJS) 2>/dev/null \
+	$(Q)$(NM) -g $(OBJS) 2>/dev/null \
 	    | awk '$$1 ~ /^[0-9a-fA-F]+$$/ { print $$NF }' \
 	    | $(if $(filter Darwin,$(UNAME_S)),sed 's/^_//',cat) \
 	    | LC_ALL=C sort -u > $@

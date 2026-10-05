@@ -31,4 +31,9 @@ UPSTREAM_SRCS := $(addprefix $(OUT)/upstream/src/,$(UPSTREAM_SRC_BASES))
 OBJROOT := $(OUT)$(if $(filter 1,$(WASM)),/wasm)
 UPSTREAM_OBJS := $(patsubst $(OUT)/upstream/src/%.c,$(OBJROOT)/upstream/src/%.o,$(UPSTREAM_SRCS))
 
+# Windows: the POSIX shims behind compat/win32/include (see mk/windows.mk).
+ifeq ($(WINDOWS),1)
+SRCS += compat/win32/dlfcn.c compat/win32/event-pipe.c compat/win32/posix.c
+endif
+
 OBJS := $(patsubst %.c,$(OBJROOT)/%.o,$(SRCS)) $(UPSTREAM_OBJS)

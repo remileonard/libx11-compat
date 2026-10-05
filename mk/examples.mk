@@ -1,6 +1,7 @@
 EXAMPLE_NAMES := 2048 paint life clock mandel processing clipboard catclock \
     moire
-EXAMPLE_BINS := $(addprefix $(OUT)/examples/,$(EXAMPLE_NAMES))
+# $(EXE) is .exe under WINDOWS=1 (mk/windows.mk), empty elsewhere.
+EXAMPLE_BINS := $(addsuffix $(EXE),$(addprefix $(OUT)/examples/,$(EXAMPLE_NAMES)))
 ifeq ($(XCB),1)
   XCB_SHOWCASE_NAMES := xcb-kaleidoscope xcb-mandelbrot
   XCB_SHOWCASE_BINS := $(addprefix $(OUT)/examples/,$(XCB_SHOWCASE_NAMES))
@@ -25,7 +26,7 @@ X11PERF_SRCS := \
     $(X11PERF_DIR)/do_valgc.c \
     $(X11PERF_DIR)/do_windows.c \
     $(X11PERF_DIR)/x11perf.c
-X11PERF_BIN := $(OUT)/examples/x11perf
+X11PERF_BIN := $(OUT)/examples/x11perf$(EXE)
 X11PERF_BENCH_ARGS ?= -all -repeat 1 -reps 1
 EXAMPLE_LDFLAGS :=
 ifeq ($(UNAME_S),Linux)
@@ -53,7 +54,7 @@ check-xcb-showcases: $(XCB_SHOWCASE_BINS)
 bench-x11perf: $(X11PERF_BIN)
 	SDL_VIDEODRIVER=dummy $(X11PERF_BIN) $(X11PERF_BENCH_ARGS)
 
-$(OUT)/examples/%: examples/%.c $(TARGET)
+$(OUT)/examples/%$(EXE): examples/%.c $(TARGET)
 	@mkdir -p $(dir $@)
 	@echo "  CC      $<"
 	$(Q)$(CC) $(CPPFLAGS) $(FP_CFLAGS) $(CFLAGS_EXTRA) $< $(TARGET) \

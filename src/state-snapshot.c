@@ -440,7 +440,7 @@ static int writeSnapshotJson(const char *path, const UiSnapshot *snap)
      */
     int writeErr = ferror(fp);
     int closeRc = fclose(fp);
-    if (writeErr || closeRc != 0 || rename(tmpPath, path) != 0) {
+    if (writeErr || closeRc != 0 || compatRenameReplace(tmpPath, path) != 0) {
         unlink(tmpPath);
         free(tmpPath);
         return -1;

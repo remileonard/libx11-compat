@@ -142,4 +142,17 @@ long long compatEnvClamped(const char *name,
                            long long hi);
 
 
+/* rename() that replaces an existing destination, as POSIX rename() does.
+ * Windows' rename() fails when the target exists, so it goes through
+ * MoveFileEx(MOVEFILE_REPLACE_EXISTING) there (compat/win32/posix.c).
+ */
+static inline int compatRenameReplace(const char *from, const char *to)
+{
+#ifdef _WIN32
+    return x11compatRenameReplace(from, to);
+#else
+    return rename(from, to);
+#endif
+}
+
 #endif /* UTIL_H */
