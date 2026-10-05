@@ -3,7 +3,8 @@
 [Open Inventor](https://github.com/aumuell/open-inventor) (SGI's 2.1 scene-graph
 toolkit, the codebase behind the *Inventor Mentor* and *Inventor Toolmaker*
 books) builds and renders against libx11-compat, including its Motif viewers
-(`SoXt`). `mk/open-inventor.mk` drives the build, on Linux with `GLX=1`.
+(`SoXt`). `mk/open-inventor.mk` drives the build with `GLX=1`, on Linux or on
+macOS with Homebrew Mesa (see [macOS](#macos-homebrew-mesa) below).
 
 ## What it links against
 
@@ -16,8 +17,8 @@ supplies libjpeg, freetype, iconv and the Mesa/GLVND runtime:
 | XInput (`SoXtSpaceball`) | `libXi-compat` (`compat/xi-compat.c`): reports no extra devices |
 | Motif (`SoXt` viewers, editors) | the in-tree Motif build (`mk/motif.mk`), not a system `libXm` |
 | GLX | `libx11-compat` (`src/glx.c`), including the pbuffer-backed `glXCreateGLXPixmap` used by `SoOffscreenRenderer` |
-| OpenGL | GLVND's gl-only `libOpenGL`, dispatching to the Mesa desktop compatibility context libx11-compat creates on EGL (the direct path, no gl4es) |
-| GLU (tessellator, NURBS) | [mesa/glu](https://gitlab.freedesktop.org/mesa/glu) 9.0.3, compiled here against `libOpenGL` |
+| OpenGL | a gl-only GL library dispatching to the Mesa desktop compatibility context libx11-compat creates on EGL (the direct path, no gl4es): GLVND's `libOpenGL` on Linux, the in-tree re-export shim over Homebrew Mesa's `libGL` on macOS |
+| GLU (tessellator, NURBS) | [mesa/glu](https://gitlab.freedesktop.org/mesa/glu) 9.0.3, compiled here against that GL library |
 
 Open Inventor's CMake build finds its dependencies with `find_package()`, which
 searches the host first. `scripts/open-inventor-cache.cmake` (passed with
@@ -54,6 +55,32 @@ Open Inventor's font library opens fonts by PostScript-style name
 (`LIBX11_COMPAT_EGL`). GLVND has to be the provider: the `gl*` from `libOpenGL`
 only reach the context when GLVND's libEGL made it current. Headless snapshots
 also default to `EGL_PLATFORM=surfaceless`.
+
+### macOS (Homebrew Mesa)
+
+The same build runs on macOS over Homebrew's Mesa, rendering on the CPU
+(llvmpipe) with no XQuartz. It is the setup Motif's `paperplane` already uses:
+- Mesa's `libEGL.dylib` (surfaceless) is the EGL provider.
+- Mesa's `libGL` is monolithic: it exports `glX*` as well as `gl*`. Open
+  Inventor and GLU therefore link the gl-only re-export shim that `mk/motif.mk`
+  builds in `build/glshim`, so `glX*` still resolve to libx11-compat.
+- `check-open-inventor` audits the install names with `otool -L`: X11, Motif
+  and GL libraries must be `@rpath/` or under `build/`, never XQuartz's or
+  Homebrew's.
+
+```sh
+brew install mesa cmake sdl3 sdl3_ttf pixman pkgconf \
+    autoconf automake libtool bison flex jpeg freetype fontconfig
+make GLX=1 open-inventor
+scripts/run-open-inventor.sh 02.4.Examiner
+make GLX=1 check-open-inventor
+```
+
+`run-open-inventor.sh` sets `LIBX11_COMPAT_EGL` to Mesa's `libEGL.dylib`,
+`EGL_PLATFORM=surfaceless`, and puts `build/glshim` and Mesa's `lib/` on the
+loader path. This path was written on Linux and has not been run on a Mac yet;
+the macOS CI job builds and checks it as a non-blocking `open-inventor` leg.
+The GPU-accelerated native route is the CGL roadmap below.
 
 ## Your own programs
 
@@ -128,9 +155,9 @@ render gate.
 
 ## Limitations
 
-- Linux + Mesa only: the direct path needs GLVND `libOpenGL` and Mesa's desktop
-  GL over EGL. On macOS the gl4es/ANGLE path would be needed instead (not wired
-  up).
+- Mesa only: Linux (GLVND `libOpenGL`) or macOS with Homebrew Mesa (CPU
+  rendering). Native GPU OpenGL on macOS (CGL) and Windows are on the roadmap
+  below.
 - A frame is shown when it is swapped. Single-buffered rendering, or front-buffer
   drawing that only calls `glFlush`, does not reach the screen until the next
   swap.

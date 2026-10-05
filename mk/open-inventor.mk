@@ -5,16 +5,19 @@
 # Everything X- and GL-shaped comes from this tree, never from the host:
 #   - Xlib/Xt/Xi       libX11-compat, libXt-compat, libXi-compat
 #   - Motif (SoXt)     the in-tree Motif build (mk/motif.mk)
-#   - OpenGL           the direct desktop-GL path (mk/glx-direct.mk): gl* from
-#                      GLVND's gl-only libOpenGL, glX* from libx11-compat, on the
-#                      system Mesa desktop compatibility context; no gl4es
-#   - GLU              mesa/glu, compiled here against libOpenGL
+#   - OpenGL           the direct desktop-GL path (mk/glx-direct.mk): gl* go
+#                      straight to a Mesa desktop compatibility context, glX*
+#                      come from libx11-compat; no gl4es. Linux: GLVND's
+#                      gl-only libOpenGL. macOS: Homebrew Mesa through the
+#                      gl-only re-export shim mk/motif.mk builds for GLw
+#                      ($(MOTIF_GLSHIM_DIR)), which keeps Mesa's glX* out.
+#   - GLU              mesa/glu, compiled here against that GL library
 # scripts/open-inventor-cache.cmake pins those for Open Inventor's CMake build,
 # and check-open-inventor audits the linked binaries for any host X11/GL library.
 # libjpeg, freetype and iconv still come from the host.
 #
-# Linux + GLX=1 only (the direct path needs GLVND libOpenGL + Mesa EGL); a no-op
-# elsewhere.
+# Linux + GLX=1, or macOS + GLX=1 with Homebrew Mesa (brew install mesa); a
+# no-op elsewhere.
 
 OI_URL := https://github.com/aumuell/open-inventor
 OI_REVISION := 0813fbbc2e778d31c66325c8561404d26c659c52
@@ -40,7 +43,6 @@ GLU_SRC_STAMP := $(GLU_SRC_DIR)/.source-stamp
 OI_GIT_Q := $(if $(filter 1,$(V)),,--quiet)
 OI_BUILD_ROOT := $(OUT)/open-inventor
 OI_GLU_DIR := $(OI_BUILD_ROOT)/glu
-OI_GLU_LIB := $(OI_GLU_DIR)/libGLU.so
 OI_SYSROOT := $(OI_BUILD_ROOT)/sysroot
 OI_SYSROOT_STAMP := $(OI_SYSROOT)/.stamp
 OI_BUILD_DIR := $(OI_BUILD_ROOT)/build
@@ -56,7 +58,7 @@ OI_CMAKE ?= cmake
 # (or another fragment) sets it; GLU's NURBS code and examples/inventor need one.
 OI_CXX = $(or $(CXX),$(OI_CXX_DEFAULT))
 OI_CXX_DEFAULT := $(shell command -v clang++ >/dev/null 2>&1 && printf clang++ || printf c++)
-OI_JOBS ?= $(shell nproc 2>/dev/null || echo 2)
+OI_JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
 
 OI_CMAKE_FLAGS := \
     -DCMAKE_BUILD_TYPE=Release \
@@ -80,9 +82,46 @@ define oi_git_checkout
 	    git clean $(OI_GIT_Q) -fdx >/dev/null
 endef
 
+# Per-platform pieces of the direct GL path; the rules below are shared.
+#   OI_OPENGL_LIB   the gl-only GL library (gl*, no glX*) everything links
+#   OI_OPENGL_DEP   make prerequisite that produces it (empty if from the host)
+#   OI_EGL_LIB      the EGL provider libx11-compat loads (LIBX11_COMPAT_EGL)
+#   OI_DSO          Open Inventor's shared-library suffix (CMake's choice)
+OI_PLATFORM :=
 ifeq ($(GLX)/$(UNAME_S),1/Linux)
-
+OI_PLATFORM := linux
 OI_OPENGL_LIB := $(shell $(CC) -print-file-name=libOpenGL.so 2>/dev/null)
+OI_OPENGL_DEP :=
+OI_EGL_LIB := $(shell $(CC) -print-file-name=libEGL.so.1 2>/dev/null)
+OI_DSO := .so
+OI_GLU_LIB := $(OI_GLU_DIR)/libGLU.so
+OI_GLU_REAL := libGLU.so.1
+OI_GLU_LINK = -shared -Wl,-soname,$(OI_GLU_REAL) -Wl,--no-undefined
+OI_MISSING_HINT := install libegl-dev libopengl-dev
+endif
+# macOS: MOTIF_GLSHIM_DIR is set by mk/motif.mk only when Homebrew Mesa is
+# installed. Mesa's libGL is monolithic (gl* and glX*), so Open Inventor links
+# the shim that re-exports its gl* alone, exactly like GLw/paperplane.
+ifeq ($(GLX)/$(UNAME_S),1/Darwin)
+ifdef MOTIF_GLSHIM_DIR
+OI_PLATFORM := darwin
+OI_OPENGL_LIB := $(abspath $(MOTIF_GLSHIM_DIR))/libGL.dylib
+OI_OPENGL_DEP := $(MOTIF_GL_PKGCONFIG)
+OI_EGL_LIB := $(MOTIF_MESA_PREFIX)/lib/libEGL.dylib
+OI_DSO := .dylib
+OI_GLU_LIB := $(OI_GLU_DIR)/libGLU.dylib
+OI_GLU_REAL := libGLU.1.dylib
+OI_GLU_LINK = -dynamiclib -install_name $(abspath $(OI_GLU_DIR))/$(OI_GLU_REAL)
+OI_MISSING_HINT := brew install mesa
+# Homebrew's jpeg/freetype and its newer bison (Open Inventor's grammar).
+OI_BREW_PREFIX := $(shell brew --prefix 2>/dev/null)
+OI_CMAKE_FLAGS += $(if $(OI_BREW_PREFIX),-DCMAKE_PREFIX_PATH=$(OI_BREW_PREFIX)) \
+    $(if $(wildcard $(OI_BREW_PREFIX)/opt/bison/bin/bison),\
+        -DBISON_EXECUTABLE=$(OI_BREW_PREFIX)/opt/bison/bin/bison)
+endif
+endif
+
+ifdef OI_PLATFORM
 
 $(OI_SRC_STAMP): mk/open-inventor.mk $(OI_PATCHES) $(OI_PATCH_LIST_FILE)
 	$(call oi_git_checkout,$(OI_URL),$(OI_SRC_DIR),$(OI_REVISION))
@@ -101,7 +140,8 @@ open-inventor-fetch: $(OI_SRC_STAMP) $(GLU_SRC_STAMP)
 
 # GLU, compiled straight from the source list in its meson.build (no meson
 # needed) and linked against libOpenGL only, so it brings no libGL/libGLX.
-$(OI_GLU_LIB): $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h $(GL_HDR_CACHE)/GL/glext.h
+$(OI_GLU_LIB): $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h $(GL_HDR_CACHE)/GL/glext.h \
+    $(OI_OPENGL_DEP)
 	@echo "  CC      glu"
 	$(Q)rm -rf $(OI_GLU_DIR)
 	$(Q)mkdir -p $(OI_GLU_DIR)/obj
@@ -117,9 +157,9 @@ $(OI_GLU_LIB): $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h $(GL_HDR_CACHE)/GL/glext
 	        -I$(GL_HDR_CACHE) -c $(GLU_SRC_DIR)/src/$$src -o $$obj; \
 	    objs="$$objs $$obj"; \
 	done; \
-	$(OI_CXX) -shared -Wl,-soname,libGLU.so.1 -Wl,--no-undefined \
-	    -o $(OI_GLU_DIR)/libGLU.so.1 $$objs $(OI_OPENGL_LIB)
-	$(Q)ln -sf libGLU.so.1 $@
+	$(OI_CXX) $(OI_GLU_LINK) -o $(OI_GLU_DIR)/$(OI_GLU_REAL) $$objs \
+	    $(OI_OPENGL_LIB)
+	$(Q)ln -sf $(OI_GLU_REAL) $@
 
 # One include root holding X11/, Xm/ and GL/ so the CMake cache can point every
 # X/GL include dir at it: the staged upstream X11 headers overlaid with the
@@ -157,10 +197,12 @@ OI_COMPAT_LIBS := $(TARGET) $(LIBXT_TARGET) $(XI_COMPAT_TARGET) \
     $(XEXT_COMPAT_TARGET) $(ICE_COMPAT_TARGET) $(SM_COMPAT_TARGET) $(MOTIF_LIBXM)
 
 $(OI_CONFIG_STAMP): mk/open-inventor.mk scripts/open-inventor-cache.cmake \
-    $(OI_SRC_STAMP) $(OI_SYSROOT_STAMP) $(OI_GLU_LIB) $(OI_COMPAT_LIBS)
+    $(OI_SRC_STAMP) $(OI_SYSROOT_STAMP) $(OI_GLU_LIB) $(OI_COMPAT_LIBS) \
+    $(OI_OPENGL_DEP)
 	@echo "  CMAKE   open-inventor"
 	$(Q)test -f "$(OI_OPENGL_LIB)" || { \
-	    echo "  FAIL    no system libOpenGL.so (install libopengl-dev)" >&2; exit 1; }
+	    echo "  FAIL    no gl-only GL library $(OI_OPENGL_LIB) ($(OI_MISSING_HINT))" >&2; \
+	    exit 1; }
 	$(Q)rm -rf $(OI_BUILD_DIR)
 	$(Q)mkdir -p $(OI_BUILD_DIR)
 	$(Q)$(OI_CMAKE) -S $(OI_SRC_DIR) -B $(OI_BUILD_DIR) \
@@ -200,8 +242,8 @@ OI_USER_CXXFLAGS := -O2 -std=$(OI_USER_STD) -Wno-write-strings \
     $(foreach d,libSoXt/include lib/database/include lib/interaction/include \
         lib/nodekits/include,-I$(OI_SRC_DIR)/$(d)) \
     -isystem $(OI_SYSROOT)
-OI_USER_LIBS := $(OI_BUILD_DIR)/libSoXt/libInventorXt.so \
-    $(OI_BUILD_DIR)/lib/libInventor.so $(MOTIF_LIBXM) $(LIBXT_TARGET) \
+OI_USER_LIBS := $(OI_BUILD_DIR)/libSoXt/libInventorXt$(OI_DSO) \
+    $(OI_BUILD_DIR)/lib/libInventor$(OI_DSO) $(MOTIF_LIBXM) $(LIBXT_TARGET) \
     $(XI_COMPAT_TARGET) $(TARGET) $(OI_GLU_LIB) $(OI_OPENGL_LIB)
 OI_USER_RPATH := $(foreach d,$(OUT) $(OI_GLU_DIR) $(OI_BUILD_DIR)/libSoXt \
     $(OI_BUILD_DIR)/lib,-Wl$(comma)-rpath$(comma)$(abspath $(d)))
@@ -215,7 +257,7 @@ $(OI_USER_DIR)/%: examples/inventor/%.c++ $(OI_BUILD_STAMP) $(OI_FONT_STAMP)
 open-inventor-examples: $(OI_USER_BINS)
 
 # Binaries whose dynamic dependencies check-open-inventor audits.
-OI_AUDIT_BINS := lib/libInventor.so libSoXt/libInventorXt.so \
+OI_AUDIT_BINS := lib/libInventor$(OI_DSO) libSoXt/libInventorXt$(OI_DSO) \
     apps/examples/Mentor/CXX/02.1.HelloCone apps/examples/Mentor/CXX/02.4.Examiner
 # Examples rendered headless (scripts/run-open-inventor.sh --snapshot). The
 # content check looks only at the GL canvas (OI_CHECK_REGION, x,y,w,h): the
@@ -223,50 +265,70 @@ OI_AUDIT_BINS := lib/libInventor.so libSoXt/libInventorXt.so \
 OI_CHECK_EXAMPLES := 02.1.HelloCone 02.4.Examiner
 OI_CHECK_REGION := 30,5,340,340
 
+# Link audit, per platform. Every X11/Motif/GL library a binary loads must come
+# from this tree; Linux resolves with ldd, macOS reads otool -L install names
+# (@rpath/ entries resolve through the build-tree rpaths).
+ifeq ($(OI_PLATFORM),linux)
+OI_XT_REQUIRED := libXm.so.5 libXt-compat libX11-compat libXi-compat \
+    libOpenGL.so.0 libGLU.so.1
+oi_list_needed = readelf -d $(1) | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'
+define oi_audit_bin
+deps=$$(LD_LIBRARY_PATH=$$outdir ldd $(1) | \
+    sed -n 's/^[[:space:]]*\([^[:space:]]*\) => \([^[:space:]]*\).*/\1 \2/p'); \
+echo "$$deps" | grep -Eq '^lib(GL|GLX)\.so' && { \
+    echo "  FAIL    $(1) pulls libGL/libGLX:" >&2; echo "$$deps" >&2; exit 1; }; \
+bad=$$(echo "$$deps" | \
+    grep -E '^lib(X11|Xt|Xi|Xext|Xmu|Xft|Xm|Mrm|ICE|SM|xcb|GLU)[.-]' | \
+    grep -v " $$outdir/" || true)
+endef
+else
+OI_XT_REQUIRED := libXm libXt-compat libX11-compat libXi-compat \
+    glshim/libGL.dylib $(OI_GLU_REAL)
+oi_list_needed = otool -L $(1) | tail -n +2
+define oi_audit_bin
+deps=$$(otool -L $(1) | tail -n +2 | sed 's/^[[:space:]]*//; s/ (.*//'); \
+bad=$$(echo "$$deps" | \
+    grep -E '/lib(X11|Xt|Xi|Xext|Xmu|Xft|Xm|Mrm|ICE|SM|xcb|GL|GLX|GLU)[.-]' | \
+    grep -v -e '^@rpath/' -e "^$$outdir/" || true)
+endef
+endif
+
 ## Audit Open Inventor's links and render Mentor examples headless (direct GL)
 check-open-inventor:
-	$(Q)egl=$$($(CC) -print-file-name=libEGL.so.1); \
-	    if [ ! -f "$$egl" ] || [ ! -f "$(OI_OPENGL_LIB)" ]; then \
-	        echo "  SKIP    open-inventor (no system libEGL.so.1/libOpenGL.so; install libegl-dev libopengl-dev)"; \
-	        exit 0; \
+	$(Q)if [ ! -f "$(OI_EGL_LIB)" ] || \
+	    { [ ! -f "$(OI_OPENGL_LIB)" ] && [ -z "$(OI_OPENGL_DEP)" ]; }; then \
+	    echo "  SKIP    open-inventor (no $(OI_EGL_LIB) / $(OI_OPENGL_LIB); $(OI_MISSING_HINT))"; \
+	    exit 0; \
+	fi; \
+	set -e; \
+	$(MAKE) --no-print-directory open-inventor; \
+	outdir=$(abspath $(OUT)); \
+	for bin in $(OI_AUDIT_BINS); do \
+	    echo "  CHECK   open-inventor links $$bin"; \
+	    $(call oi_audit_bin,$(OI_BUILD_DIR)/$$bin); \
+	    if [ -n "$$bad" ]; then \
+	        echo "  FAIL    $$bin loads X/GL libraries from outside $(OUT):" >&2; \
+	        echo "$$bad" >&2; exit 1; \
 	    fi; \
-	    set -e; \
-	    $(MAKE) --no-print-directory open-inventor; \
-	    outdir=$(abspath $(OUT)); \
-	    for bin in $(OI_AUDIT_BINS); do \
-	        echo "  CHECK   open-inventor links $$bin"; \
-	        deps=$$(LD_LIBRARY_PATH=$$outdir ldd $(OI_BUILD_DIR)/$$bin | \
-	            sed -n 's/^[[:space:]]*\([^[:space:]]*\) => \([^[:space:]]*\).*/\1 \2/p'); \
-	        echo "$$deps" | grep -Eq '^lib(GL|GLX)\.so' && { \
-	            echo "  FAIL    $$bin pulls libGL/libGLX:" >&2; echo "$$deps" >&2; exit 1; }; \
-	        bad=$$(echo "$$deps" | \
-	            grep -E '^lib(X11|Xt|Xi|Xext|Xmu|Xft|Xm|Mrm|ICE|SM|xcb|GLU)[.-]' | \
-	            grep -v " $$outdir/" || true); \
-	        if [ -n "$$bad" ]; then \
-	            echo "  FAIL    $$bin resolves X/GL libraries outside $(OUT):" >&2; \
-	            echo "$$bad" >&2; exit 1; \
-	        fi; \
-	    done; \
-	    xt=$$(readelf -d $(OI_BUILD_DIR)/libSoXt/libInventorXt.so | \
-	        sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'); \
-	    for lib in libXm.so.5 libXt-compat.so libX11-compat.so libXi-compat.so \
-	               libOpenGL.so.0 libGLU.so.1; do \
-	        echo "$$xt" | grep -q "$$lib" || { \
-	            echo "  FAIL    libInventorXt does not link $$lib" >&2; exit 1; }; \
-	    done; \
-	    for ex in $(OI_CHECK_EXAMPLES); do \
-	        echo "  CHECK   open-inventor render $$ex"; \
-	        OUT=$(OUT) scripts/run-open-inventor.sh $$ex \
-	            --snapshot $(OUT)/open-inventor-$$ex.png; \
-	        $(PYTHON) scripts/assert-image-content.py \
-	            $(OUT)/open-inventor-$$ex.png 0.10 --region $(OI_CHECK_REGION); \
-	    done
+	done; \
+	xt=$$($(call oi_list_needed,$(OI_BUILD_DIR)/libSoXt/libInventorXt$(OI_DSO))); \
+	for lib in $(OI_XT_REQUIRED); do \
+	    echo "$$xt" | grep -q "$$lib" || { \
+	        echo "  FAIL    libInventorXt does not link $$lib" >&2; exit 1; }; \
+	done; \
+	for ex in $(OI_CHECK_EXAMPLES); do \
+	    echo "  CHECK   open-inventor render $$ex"; \
+	    OUT=$(OUT) scripts/run-open-inventor.sh $$ex \
+	        --snapshot $(OUT)/open-inventor-$$ex.png; \
+	    $(PYTHON) scripts/assert-image-content.py \
+	        $(OUT)/open-inventor-$$ex.png 0.10 --region $(OI_CHECK_REGION); \
+	done
 
 else
 open-inventor open-inventor-fetch open-inventor-examples:
-	@echo "  SKIP    open-inventor (needs Linux + GLX=1)"
+	@echo "  SKIP    open-inventor (needs GLX=1 on Linux, or on macOS with Homebrew Mesa)"
 check-open-inventor:
-	@echo "  SKIP    open-inventor (needs Linux + GLX=1)"
+	@echo "  SKIP    open-inventor (needs GLX=1 on Linux, or on macOS with Homebrew Mesa)"
 endif
 
 open-inventor-clean:

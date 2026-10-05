@@ -5,9 +5,11 @@
 # --snapshot for a headless PNG. Build first with: make GLX=1 open-inventor
 # (and make GLX=1 open-inventor-examples for examples/inventor/).
 #
-# gl* dispatch through GLVND's libOpenGL to the context libx11-compat creates on
-# EGL, so the EGL provider must be GLVND's libEGL.so.1 (not a vendor libEGL
-# loaded directly). Headless snapshots default to Mesa's surfaceless platform.
+# Linux: gl* dispatch through GLVND's libOpenGL to the context libx11-compat
+# creates on EGL, so the EGL provider must be GLVND's libEGL.so.1 (not a vendor
+# libEGL loaded directly); headless snapshots use Mesa's surfaceless platform.
+# macOS: Homebrew Mesa's libEGL (surfaceless) with gl* from the in-tree gl-only
+# shim over Mesa's libGL, as for Motif's paperplane (scripts/run-paperplane.sh).
 #
 # Usage:
 #   run-open-inventor.sh <name>                       open a live window
@@ -44,7 +46,19 @@ prog=$(find "$user" "$apps" -type f -perm -u+x -name "$name" ! -path '*/CMakeFil
     exit 1
 }
 
-export LIBX11_COMPAT_EGL="${LIBX11_COMPAT_EGL:-libEGL.so.1}"
+case "$(uname -s)" in
+    Darwin)
+        mesa=$(brew --prefix mesa 2>/dev/null || echo /opt/homebrew/opt/mesa)
+        export LIBX11_COMPAT_EGL="${LIBX11_COMPAT_EGL:-$mesa/lib/libEGL.dylib}"
+        export EGL_PLATFORM="${EGL_PLATFORM:-surfaceless}"
+        # Loader path for the runners (scripts/glx-snapshot.sh and
+        # scripts/run-glx-window.sh prepend $out themselves).
+        export GLX_EXTRA_LIBS="$PWD/$out/glshim:$mesa/lib${GLX_EXTRA_LIBS:+:$GLX_EXTRA_LIBS}"
+        ;;
+    *)
+        export LIBX11_COMPAT_EGL="${LIBX11_COMPAT_EGL:-libEGL.so.1}"
+        ;;
+esac
 # Font files under Open Inventor's names (make open-inventor builds them), so
 # SoText2/SoText3 find a font instead of drawing nothing.
 if [ -z "${FL_FONT_PATH:-}" ] && [ -d "$out/open-inventor/fonts" ]; then

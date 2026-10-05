@@ -130,6 +130,11 @@ jobs:
           # it has its own green rounds here. Its six replays all hardcode
           # --offscreen, so the smoke runs headless like the others.
           - { app: xwpe,       src: build/upstream/xwpe,          mk: mk/xwpe.mk,       patches: compat/xwpe-patches/**,     tarball: "",                                              exp: true,  smoke: "check-smoke-xwpe" }
+          # Open Inventor (SoXt on the in-tree Motif) over Homebrew Mesa's
+          # desktop GL through the gl-only shim, GLU built in-tree. New to
+          # macOS, so it enters non-blocking (exp: true). Its smoke is the
+          # link audit (otool) plus two headless Mentor renders.
+          - { app: open-inventor, src: build/upstream/open-inventor, mk: mk/open-inventor.mk, patches: compat/open-inventor-patches/**, tarball: "",                                 exp: true,  smoke: "check-open-inventor" }
     steps:
       - uses: actions/checkout@v7
 
@@ -161,6 +166,12 @@ jobs:
           # the Makefile drives (PYTHON ?= python3). The runner's python3 is
           # PEP 668 externally-managed, so --break-system-packages is required.
           python3 -m pip install --break-system-packages --upgrade Pillow
+
+      # Open Inventor renders through Homebrew Mesa (libEGL + desktop libGL);
+      # only that leg needs it, so the other workloads stay Mesa-free.
+      - name: Install Mesa (open-inventor)
+        if: ${{ matrix.app == 'open-inventor' }}
+        run: brew install mesa
 
       # Cache the shared upstream tree (Xorg tarballs + extracted headers that
       # sync-upstream-headers.py fetches), whose only recipe input is
@@ -196,6 +207,8 @@ jobs:
             !build/upstream/xnedit
             !build/upstream/xclock-*
             !build/upstream/xwpe
+            !build/upstream/open-inventor
+            !build/upstream/glu
             !build/upstream/.cache/gimp-*
             !build/upstream/.cache/xfig-*
             !build/upstream/.cache/grace-*
