@@ -139,6 +139,94 @@ render gate.
   drawn.
 - Spaceball and dial-box input devices report as absent.
 
+## Roadmap: macOS (native OpenGL through CGL)
+
+On macOS the GLX layer currently runs on ANGLE: EGL over Metal, GLES only,
+with desktop GL translated by gl4es. That suits GL 2.x-style code, but not Open
+Inventor, which needs the legacy GL 1.x surface (`GL_SELECT` picking,
+`GL_FEEDBACK`, display lists, the attribute stack) that gl4es covers only
+partly. macOS still ships a full compatibility OpenGL: Apple's **legacy 2.1
+profile**, GPU-accelerated, with GLU in `OpenGL.framework`. It is deprecated
+(since 10.14) but present. The target is a **native CGL backend in
+`src/glx.c`**, the macOS counterpart of the Linux direct path: no ANGLE, no
+gl4es, no Mesa. Clients link `-framework OpenGL` for `gl*`/`glu*`. That
+framework exports no `glX*` (unlike XQuartz's `libGL`), so `glX*` keep
+resolving to libx11-compat.
+
+### Main path: CGL backend
+
+1. **Make the GLX layer backend-agnostic.** Every EGL call in `src/glx.c` goes
+   through the `EglApi` table (`src/egl-wrapper.h`), so it is the natural seam.
+   Introduce a small backend interface covering:
+   - choosing a config from GLX attributes;
+   - querying attributes for `glXGetConfig`/`glXGetFBConfigAttrib`;
+   - creating, sharing and destroying contexts;
+   - window and offscreen surfaces;
+   - make-current, swap, and `glXGetProcAddress`.
+
+   Keep EGL as one implementation and add CGL as the other. Select the backend
+   at runtime (e.g. `LIBX11_COMPAT_GLX_BACKEND=cgl|egl`). The default on macOS
+   should be CGL once it passes the checks below; ANGLE stays available.
+2. **Pixel formats.** Map the GLX visual and FBConfig attributes onto
+   `CGLChoosePixelFormat`:
+   - `kCGLPFAOpenGLProfile = kCGLOGLPVersion_Legacy`;
+   - color, depth and stencil sizes, double buffering, accumulation;
+   - `kCGLPFAAccelerated`, falling back to Apple's software renderer
+     (`kCGLRendererGenericFloatID`) where no GPU is available, as on CI
+     runners.
+
+   The lazy-visual scheme of `glXChooseVisual` carries over unchanged. Keep
+   rejecting overlay levels and color-index visuals.
+3. **Contexts.** `CGLCreateContext` with share groups for share lists,
+   `CGLSetCurrentContext` for make-current, and per-thread current state as
+   today.
+4. **Drawables: keep real window-system framebuffer semantics.** Legacy code
+   calls `glDrawBuffer(GL_BACK)`/`GL_FRONT` and `glReadBuffer`, which fail with
+   an FBO bound, so the drawable must be a real default framebuffer:
+   - *top-level GL windows*: attach the context to the SDL window's `NSView`
+     (`NSOpenGLContext`/CGL surface, `wantsBestResolutionOpenGLSurface = NO`
+     to keep the 1:1 point mapping the Metal path pins today). Present with
+     `CGLFlushDrawable`; this replaces the `CAMetalLayer` surface.
+   - *child GL widgets* (`GLwDrawingArea`, the `SoXt` render area inside its
+     Motif frame) and *headless runs*: an offscreen drawable with a true
+     front/back pair (a `CGLPBufferObj`, deprecated but working, or an
+     IOSurface-backed context), read back with `glReadPixels` and handed to the
+     existing compositor (`glxCompositeToWindow`), exactly like the EGL pbuffer
+     path. `glXCreateGLXPixmap`/`glXCreatePbuffer` map onto the same object.
+   - this would also make front-buffer drawing visible (flush, then composite),
+     so `compat/open-inventor-patches/0002` could become unnecessary on this
+     backend.
+5. **Build and link.** Compile with `-DGL_SILENCE_DEPRECATION` and link the
+   GLX layer against `OpenGL.framework`. `mk/open-inventor.mk` gains a Darwin
+   branch: the cache script points `OPENGL_*` at the framework and
+   `OPENGL_glu_LIBRARY` at its GLU, so the in-tree mesa/glu is not needed.
+   Motif already builds on macOS (the paperplane path).
+6. **Validation.**
+   - `tests/test-glx-direct.c` runs unchanged on macOS, linked with
+     `-framework OpenGL`; `GL_VERSION` must report the legacy 2.1 profile, and
+     `GL_SELECT`, feedback, display lists, the attribute stack and GLXPixmap
+     must all pass.
+   - `check-open-inventor` swaps `ldd` for `otool -L`: no XQuartz
+     (`/opt/X11`), no Homebrew `libGL`, and `libXm`/`libXt`/`libX11` must come
+     from `build/`.
+   - The Mentor sweep must match the Linux result (54/66).
+   - Run all of it in the macOS CI job.
+
+Risks: Apple could remove OpenGL in a future macOS (the ANGLE path then
+remains the fallback), and the legacy profile is frozen at 2.1, which is ample
+for Open Inventor-era code.
+
+### Secondary path: Homebrew Mesa
+
+The Linux direct path ports almost as is to macOS with Homebrew Mesa: EGL in
+surfaceless mode and llvmpipe, i.e. a real compatibility profile rendered on
+the CPU. Homebrew's `libGL` is monolithic, exporting both `gl*` and `glX*`, so
+clients must link through the gl-only re-export shim `mk/motif.mk` already
+builds for paperplane (`MOTIF_GLSHIM_DIR`). That keeps `glX*` on
+libx11-compat. It is a quick way to get Open Inventor running on macOS, and a
+CPU reference to compare the CGL backend against, but it is not the target: no
+GPU, and an extra Homebrew dependency.
+
 ## Roadmap: Windows
 
 The longer-term goal is to run the same old X11/Motif and Open Inventor
