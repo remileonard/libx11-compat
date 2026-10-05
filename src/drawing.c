@@ -145,9 +145,9 @@ static Bool presentUsesIntegerScale(double sx,
 static Window wasmCanvasHostWindow(void)
 {
     WindowStruct *screen = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     for (size_t i = 0; i < screen->children.length; i++) {
-        Window w = children[i];
+        Window w = CHILD_AT(children, i);
         if (!IS_TYPE(w, WINDOW))
             continue;
         WindowStruct *ws = GET_WINDOW_STRUCT(w);
@@ -627,17 +627,17 @@ static Bool hasPendingWindowPresent(void)
     if (SCREEN_WINDOW == None)
         return False;
     WindowStruct *screenWindow = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     for (size_t i = 0; i < screenWindow->children.length; i++) {
         /* destroyScreenWindow destroys children with freeParentData False, so
          * the array transiently holds already-destroyed ids: destroyWindow
          * leaves them typed CLOSED_WINDOW with a NULL data pointer. Skip any
          * non-WINDOW id; GET_WINDOW_STRUCT would return NULL and deref-crash.
          */
-        if (!IS_TYPE(children[i], WINDOW))
+        if (!IS_TYPE(CHILD_AT(children, i), WINDOW))
             continue;
 
-        WindowStruct *child = GET_WINDOW_STRUCT(children[i]);
+        WindowStruct *child = GET_WINDOW_STRUCT(CHILD_AT(children, i));
         if (child->sdlWindow && child->needsPresent)
             return True;
     }
@@ -1274,7 +1274,7 @@ void drawWindowDataToScreen()
     uint64_t updateNs = 0;
     uint64_t presentedPixels = 0;
     size_t presentedWindows = 0;
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     SDL_Texture *prevTarget = SDL_GetRenderTarget(screen);
     Bool screenTargetMutated = False;
 #ifdef __EMSCRIPTEN__
@@ -1293,9 +1293,9 @@ void drawWindowDataToScreen()
          * CLOSED_WINDOW; skip it before GET_WINDOW_STRUCT returns NULL (see
          * hasPendingWindowPresent).
          */
-        if (!IS_TYPE(children[i], WINDOW))
+        if (!IS_TYPE(CHILD_AT(children, i), WINDOW))
             continue;
-        WindowStruct *child = GET_WINDOW_STRUCT(children[i]);
+        WindowStruct *child = GET_WINDOW_STRUCT(CHILD_AT(children, i));
         if (!child->sdlWindow)
             continue;
 
@@ -1326,7 +1326,7 @@ void drawWindowDataToScreen()
          * never silently skips a mapped window.
          */
         if (!child->sdlTexture) {
-            (void) getWindowRenderer(children[i]);
+            (void) getWindowRenderer(CHILD_AT(children, i));
             screenTargetMutated = True;
             if (!child->sdlTexture)
                 continue;
@@ -1337,9 +1337,9 @@ void drawWindowDataToScreen()
          * overlay changed OR when the host just repainted under it; either way
          * this child never falls through to the SDL-window present path.
          */
-        if (wasmHost != None && children[i] != wasmHost) {
+        if (wasmHost != None && CHILD_AT(children, i) != wasmHost) {
             if ((child->needsPresent || wasmHostPresented) &&
-                presentWasmOverlayToHost(children[i], child, wasmHost,
+                presentWasmOverlayToHost(CHILD_AT(children, i), child, wasmHost,
                                          screen)) {
                 screenTargetMutated = True;
                 presentedWindows++;
@@ -1351,7 +1351,7 @@ void drawWindowDataToScreen()
         if (!child->needsPresent)
             continue;
 #ifdef __EMSCRIPTEN__
-        if (children[i] == wasmHost)
+        if (CHILD_AT(children, i) == wasmHost)
             wasmHostPresented = True;
 #endif
 
@@ -1362,7 +1362,7 @@ void drawWindowDataToScreen()
          */
         if (!child->presentUsesSoftware && child->presentRenderer) {
             screenTargetMutated = True;
-            if (presentWindowAccelerated(children[i], child, screen,
+            if (presentWindowAccelerated(CHILD_AT(children, i), child, screen,
                                          &readbackNs, &updateNs,
                                          &presentedPixels)) {
                 presentedWindows++;
@@ -1387,7 +1387,7 @@ void drawWindowDataToScreen()
         }
 
         int w, h;
-        GET_WINDOW_DIMS(children[i], w, h);
+        GET_WINDOW_DIMS(CHILD_AT(children, i), w, h);
 
         /* Build the read rect list. fullyDirty (sentinel set by
          * unionPresentRect on a NULL mark or rect-count overflow), or a window
@@ -1430,7 +1430,8 @@ void drawWindowDataToScreen()
             readbackNs += monotonicNowNs() - readStart;
             if (readRc == 0) {
                 uint64_t updateStart = monotonicNowNs();
-                unsigned long bg = resolvedWindowBackgroundColor(children[i]);
+                unsigned long bg =
+                    resolvedWindowBackgroundColor(CHILD_AT(children, i));
                 Uint32 bgPixel =
                     mapColorToPixel(XC_SURFACE_FORMAT(winSurface), bg);
                 SDL_FillRect(winSurface, NULL, bgPixel);
@@ -1471,7 +1472,7 @@ void drawWindowDataToScreen()
                 child->hasPresented = True;
                 presentedWindows++;
                 presentedPixels += (uint64_t) source.w * (uint64_t) source.h;
-                timelineTapPresent(children[i], 1,
+                timelineTapPresent(CHILD_AT(children, i), 1,
                                    (uint64_t) source.w * (uint64_t) source.h);
             }
             SDL_FreeSurface(staging);
@@ -1511,8 +1512,8 @@ void drawWindowDataToScreen()
                                       &rendererOutputH);
             LOG("present-scale: window=%lu x11=(%dx%d) tex=(%dx%d) "
                 "winSurface=(%dx%d) rendererOutput=(%dx%d)\n",
-                children[i], w, h, texW, texH, winSurface->w, winSurface->h,
-                rendererOutputW, rendererOutputH);
+                CHILD_AT(children, i), w, h, texW, texH, winSurface->w,
+                winSurface->h, rendererOutputW, rendererOutputH);
             child->loggedPresentScale = True;
         }
 
@@ -1624,8 +1625,8 @@ void drawWindowDataToScreen()
             SDL_UpdateWindowSurfaceRects(child->sdlWindow, rects, nrects);
 #endif
 
-            fillPresentMargin(children[i], child->sdlWindow, winSurface, clampW,
-                              clampH);
+            fillPresentMargin(CHILD_AT(children, i), child->sdlWindow,
+                              winSurface, clampW, clampH);
             updateNs += monotonicNowNs() - updateStart;
             child->needsPresent = False;
             child->hasPresentRect = False;
@@ -1634,7 +1635,8 @@ void drawWindowDataToScreen()
             child->hasPresented = True;
             presentedWindows++;
             presentedPixels += windowPixels;
-            timelineTapPresent(children[i], (size_t) nrects, windowPixels);
+            timelineTapPresent(CHILD_AT(children, i), (size_t) nrects,
+                               windowPixels);
         } else {
             LOG("SDL_RenderReadPixels failed in %s: %s\n", __func__,
                 SDL_GetError());
@@ -3179,9 +3181,9 @@ static Bool renderFillRectClipByChildren(SDL_Renderer *renderer,
     int edgeCount = 0;
     edges[edgeCount++] = rect->y;
     edges[edgeCount++] = rectY2;
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     for (size_t i = 0; i < childCount; i++) {
-        Window child = children[i];
+        Window child = CHILD_AT(children, i);
         if (child == None || !IS_TYPE(child, WINDOW))
             continue;
         if (exceptChild != None && child == exceptChild)
@@ -3219,7 +3221,7 @@ static Bool renderFillRectClipByChildren(SDL_Renderer *renderer,
             .h = bandY2 - bandY1,
         };
         for (size_t i = 0; i < childCount && segmentCount > 0; i++) {
-            Window child = children[i];
+            Window child = CHILD_AT(children, i);
             if (child == None || !IS_TYPE(child, WINDOW))
                 continue;
             if (exceptChild != None && child == exceptChild)
@@ -3273,10 +3275,10 @@ static void childExcludedRegion(Window window,
 {
     regionInitRectSafe(region, rect->x, rect->y, (unsigned int) rect->w,
                        (unsigned int) rect->h);
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     size_t childCount = GET_WINDOW_STRUCT(window)->children.length;
     for (size_t i = 0; i < childCount; i++) {
-        Window child = children[i];
+        Window child = CHILD_AT(children, i);
         if (child == None || !IS_TYPE(child, WINDOW))
             continue;
         WindowStruct *childStruct = GET_WINDOW_STRUCT(child);

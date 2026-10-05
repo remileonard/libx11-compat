@@ -302,7 +302,7 @@ static void postVisibilityForWindowAndSiblings(Display *display, Window window)
         postEvent(display, window, VisibilityNotify);
         return;
     }
-    Window *children = GET_CHILDREN(parent);
+    void **children = GET_CHILDREN(parent);
     for (size_t i = 0; i < GET_WINDOW_STRUCT(parent)->children.length; i++) {
         /* A child torn down mid-teardown lingers in the array typed
          * CLOSED_WINDOW with a NULL struct (destroyScreenWindowImpl destroys
@@ -313,8 +313,8 @@ static void postVisibilityForWindowAndSiblings(Display *display, Window window)
          * draining the anchored popup unmaps it, and this walk then visits
          * siblings that are already gone.
          */
-        if (IS_TYPE(children[i], WINDOW))
-            postEvent(display, children[i], VisibilityNotify);
+        if (IS_TYPE(CHILD_AT(children, i), WINDOW))
+            postEvent(display, CHILD_AT(children, i), VisibilityNotify);
     }
 }
 
@@ -417,9 +417,9 @@ static Bool realizeTopLevelWindow(Display *display, Window window)
 #ifdef __EMSCRIPTEN__
     if (SCREEN_WINDOW != None) {
         WindowStruct *screen = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-        Window *children = GET_CHILDREN(SCREEN_WINDOW);
+        void **children = GET_CHILDREN(SCREEN_WINDOW);
         for (size_t i = 0; i < screen->children.length; i++) {
-            Window sibling = children[i];
+            Window sibling = CHILD_AT(children, i);
             if (sibling == window || !IS_TYPE(sibling, WINDOW))
                 continue;
             WindowStruct *sws = GET_WINDOW_STRUCT(sibling);
@@ -707,10 +707,10 @@ static void replayDeferredWmProperties(Display *display, Window window)
      * pairing finally binds.
      */
     if (SCREEN_WINDOW != None && IS_TYPE(SCREEN_WINDOW, WINDOW)) {
-        Window *siblings = GET_CHILDREN(SCREEN_WINDOW);
+        void **siblings = GET_CHILDREN(SCREEN_WINDOW);
         size_t count = GET_WINDOW_STRUCT(SCREEN_WINDOW)->children.length;
         for (size_t i = 0; i < count; i++) {
-            Window sibling = siblings[i];
+            Window sibling = CHILD_AT(siblings, i);
             if (sibling == window || !IS_TYPE(sibling, WINDOW))
                 continue;
 
@@ -835,12 +835,12 @@ void unrealizeTopLevelWindow(Display *display, Window window)
      */
     if (SCREEN_WINDOW != None) {
         SDL_Window *shared = windowStruct->sdlWindow;
-        Window *screenChildren = GET_CHILDREN(SCREEN_WINDOW);
+        void **screenChildren = GET_CHILDREN(SCREEN_WINDOW);
         size_t childCount = GET_WINDOW_STRUCT(SCREEN_WINDOW)->children.length;
         WindowStruct *heir = NULL;
         Window heirWindow = None;
         for (size_t i = 0; i < childCount; i++) {
-            Window sibling = screenChildren[i];
+            Window sibling = CHILD_AT(screenChildren, i);
             if (sibling == window || !IS_TYPE(sibling, WINDOW))
                 continue;
             WindowStruct *sws = GET_WINDOW_STRUCT(sibling);
@@ -863,7 +863,7 @@ void unrealizeTopLevelWindow(Display *display, Window window)
              * stops presenting until it is realized again.
              */
             for (size_t i = 0; i < childCount; i++) {
-                Window sibling = screenChildren[i];
+                Window sibling = CHILD_AT(screenChildren, i);
                 if (sibling == window || !IS_TYPE(sibling, WINDOW))
                     continue;
                 WindowStruct *sws = GET_WINDOW_STRUCT(sibling);
@@ -1202,8 +1202,8 @@ static int destroySubwindowsImpl(Display *display, Window window)
     SET_X_SERVER_REQUEST(display, X_DestroyWindow);
     TYPE_CHECK(window, WINDOW, display, 0);
     while (GET_WINDOW_STRUCT(window)->children.length > 0) {
-        Window child = GET_CHILDREN(
-            window)[GET_WINDOW_STRUCT(window)->children.length - 1];
+        Window child = CHILD_AT(GET_CHILDREN(window),
+                                GET_WINDOW_STRUCT(window)->children.length - 1);
         destroyWindow(display, child, True);
     }
     return 1;
@@ -1606,9 +1606,9 @@ void repaintTopLevelsOverlappingRect(Window exclude, SDL_Rect rect)
     WindowStruct *screen = GET_WINDOW_STRUCT(SCREEN_WINDOW);
     if (!screen)
         return;
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     for (size_t i = 0; i < screen->children.length; i++) {
-        Window w = children[i];
+        Window w = CHILD_AT(children, i);
 
         /* A child torn down mid-teardown lingers in the array typed
          * CLOSED_WINDOW with a NULL struct (destroyScreenWindowImpl destroys
@@ -1782,7 +1782,8 @@ static int mapSubwindowsImpl(Display *display, Window window)
         handleOutOfMemory(0, display, 0, 0);
         return 0;
     }
-    memcpy(children, GET_CHILDREN(window), sizeof(Window) * count);
+    for (size_t i = 0; i < count; i++)
+        children[i] = CHILD_AT(GET_CHILDREN(window), i);
     for (size_t i = 0; i < count; i++) {
         if (GET_WINDOW_STRUCT(children[i])->mapState != Mapped)
             XMapWindow(display, children[i]);
@@ -1801,7 +1802,8 @@ static int unmapSubwindowsImpl(Display *display, Window window)
         handleOutOfMemory(0, display, 0, 0);
         return 0;
     }
-    memcpy(children, GET_CHILDREN(window), sizeof(Window) * count);
+    for (size_t i = 0; i < count; i++)
+        children[i] = CHILD_AT(GET_CHILDREN(window), i);
     for (size_t i = count; i > 0; i--) {
         if (GET_WINDOW_STRUCT(children[i - 1])->mapState != UnMapped)
             XUnmapWindow(display, children[i - 1]);
@@ -2459,7 +2461,7 @@ Status XQueryTree(Display *display,
     *root_return = SCREEN_WINDOW;
     *parent_return = GET_PARENT(window);
     size_t total = GET_WINDOW_STRUCT(window)->children.length;
-    Window *source = GET_CHILDREN(window);
+    void **source = GET_CHILDREN(window);
 
     /* Internal windows (the hidden clipboard requestor, the EWMH
      * supporting-WM-check window) are library plumbing and must not surface to
@@ -2471,10 +2473,10 @@ Status XQueryTree(Display *display,
 
     unsigned int kept = 0;
     for (size_t i = 0; i < total; i++) {
-        if (IS_TYPE(source[i], WINDOW) &&
-            GET_WINDOW_STRUCT(source[i])->internal)
+        if (IS_TYPE(CHILD_AT(source, i), WINDOW) &&
+            GET_WINDOW_STRUCT(CHILD_AT(source, i))->internal)
             continue;
-        out[kept++] = source[i];
+        out[kept++] = CHILD_AT(source, i);
     }
     *children_return = out;
     *nchildren_return = kept;

@@ -10,7 +10,7 @@
 
 void printWindowHierarchyOfChild(Window window, char *prepend, int prependLen)
 {
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     /* +2: one byte for the per-depth indent character, one for the NUL. */
     char *childPrepend = malloc((size_t) prependLen + 2);
     if (!childPrepend)
@@ -20,10 +20,10 @@ void printWindowHierarchyOfChild(Window window, char *prepend, int prependLen)
     char *charPointer = childPrepend + prependLen;
     *(charPointer + 1) = '\0';
     for (size_t i = 0; i < numChildren; i++) {
-        WindowStruct *childStruct = GET_WINDOW_STRUCT(children[i]);
+        WindowStruct *childStruct = GET_WINDOW_STRUCT(CHILD_AT(children, i));
         int x, y, w, h;
-        GET_WINDOW_POS(children[i], x, y);
-        GET_WINDOW_DIMS(children[i], w, h);
+        GET_WINDOW_POS(CHILD_AT(children, i), x, y);
+        GET_WINDOW_DIMS(CHILD_AT(children, i), w, h);
         const char *mapState;
         switch (childStruct->mapState) {
         case UnMapped:
@@ -41,7 +41,8 @@ void printWindowHierarchyOfChild(Window window, char *prepend, int prependLen)
         printf(
             "%s+- Window (address: %lu, id: 0x%08lx, x: %d, y: %d, %dx%d, "
             "state: %s)",
-            prepend, children[i], childStruct->debugId, x, y, w, h, mapState);
+            prepend, CHILD_AT(children, i), childStruct->debugId, x, y, w, h,
+            mapState);
 
         if (childStruct->sdlRenderer)
             printf(", sdlRenderer = %p", childStruct->sdlRenderer);
@@ -55,7 +56,8 @@ void printWindowHierarchyOfChild(Window window, char *prepend, int prependLen)
         }
         printf("\n");
         *charPointer = (char) (i != numChildren - 1 ? ' ' : '|');
-        printWindowHierarchyOfChild(children[i], childPrepend, prependLen + 1);
+        printWindowHierarchyOfChild(CHILD_AT(children, i), childPrepend,
+                                    prependLen + 1);
     }
     free(childPrepend);
 }
@@ -85,35 +87,37 @@ void drawWindowDebugViewForChild(SDL_Renderer *renderer,
                            ((drawColor >> 8) & 0xFF) * 0.9, 0xFF);
     invalidateSdlDrawStateCache();
     SDL_RenderDrawRect(renderer, &windowRect);
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     for (i = 0; i < GET_WINDOW_STRUCT(window)->children.length; i++) {
-        drawWindowDebugViewForChild(renderer, children[i], windowRect.x,
-                                    windowRect.y);
+        drawWindowDebugViewForChild(renderer, CHILD_AT(children, i),
+                                    windowRect.x, windowRect.y);
     }
 }
 
 void drawWindowDebugView()
 {
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     int i, j;
     long windowColor;
     for (i = 0; i < GET_WINDOW_STRUCT(SCREEN_WINDOW)->children.length; i++) {
-        if (GET_WINDOW_STRUCT(children[i])->sdlRenderer) {
-            windowColor = GET_WINDOW_STRUCT(children[i])->debugId;
-            WindowStruct *windowStruct = GET_WINDOW_STRUCT(children[i]);
+        if (GET_WINDOW_STRUCT(CHILD_AT(children, i))->sdlRenderer) {
+            windowColor = GET_WINDOW_STRUCT(CHILD_AT(children, i))->debugId;
+            WindowStruct *windowStruct =
+                GET_WINDOW_STRUCT(CHILD_AT(children, i));
             SDL_RenderSetViewport(windowStruct->sdlRenderer, NULL);
             SDL_Rect windowRect;
-            GET_WINDOW_POS(children[i], windowRect.x, windowRect.y);
-            GET_WINDOW_DIMS(children[i], windowRect.w, windowRect.h);
+            GET_WINDOW_POS(CHILD_AT(children, i), windowRect.x, windowRect.y);
+            GET_WINDOW_DIMS(CHILD_AT(children, i), windowRect.w, windowRect.h);
             SDL_SetRenderDrawColor(
                 windowStruct->sdlRenderer, (windowColor >> 24) & 0xFF,
                 (windowColor >> 16) & 0xFF, (windowColor >> 8) & 0xFF, 0xFF);
             invalidateSdlDrawStateCache();
             SDL_RenderDrawRect(windowStruct->sdlRenderer, &windowRect);
-            Window *topLevelWindowChildren = GET_CHILDREN(children[i]);
+            void **topLevelWindowChildren = GET_CHILDREN(CHILD_AT(children, i));
             for (j = 0; j < windowStruct->children.length; j++) {
                 drawWindowDebugViewForChild(windowStruct->sdlRenderer,
-                                            topLevelWindowChildren[j], 0, 0);
+                                            CHILD_AT(topLevelWindowChildren, j),
+                                            0, 0);
             }
             SDL_RenderPresent(windowStruct->sdlRenderer);
         }
@@ -134,23 +138,23 @@ void drawDebugWindowChildSurfacePlanes(Window child)
                            (windowColor >> 8) & 0xFF, 0x55);
     invalidateSdlDrawStateCache();
     SDL_RenderFillRect(renderer, &windowRect);
-    Window *children = GET_CHILDREN(child);
+    void **children = GET_CHILDREN(child);
     for (i = 0; i < GET_WINDOW_STRUCT(child)->children.length; i++)
-        drawDebugWindowChildSurfacePlanes(children[i]);
+        drawDebugWindowChildSurfacePlanes(CHILD_AT(children, i));
 }
 
 void drawDebugWindowSurfacePlanes()
 {
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     int i;
     for (i = 0; i < GET_WINDOW_STRUCT(SCREEN_WINDOW)->children.length; i++) {
-        if (GET_WINDOW_STRUCT(children[i])->sdlRenderer) {
+        if (GET_WINDOW_STRUCT(CHILD_AT(children, i))->sdlRenderer) {
             SDL_Renderer *renderer =
-                GET_WINDOW_STRUCT(children[i])->sdlRenderer;
+                GET_WINDOW_STRUCT(CHILD_AT(children, i))->sdlRenderer;
             SDL_BlendMode oldBlendMode;
             SDL_GetRenderDrawBlendMode(renderer, &oldBlendMode);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            drawDebugWindowChildSurfacePlanes(children[i]);
+            drawDebugWindowChildSurfacePlanes(CHILD_AT(children, i));
             SDL_RenderPresent(renderer);
             SDL_SetRenderDrawBlendMode(renderer, oldBlendMode);
             invalidateSdlDrawStateCache();

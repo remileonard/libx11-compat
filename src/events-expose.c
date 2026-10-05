@@ -26,10 +26,10 @@ void clearWindowTreeWithoutExpose(Display *display, Window window)
         return;
     }
     XClearArea(display, window, 0, 0, 0, 0, False);
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     size_t childCount = GET_WINDOW_STRUCT(window)->children.length;
     for (size_t i = 0; i < childCount; i++)
-        clearWindowTreeWithoutExpose(display, children[i]);
+        clearWindowTreeWithoutExpose(display, CHILD_AT(children, i));
 }
 
 void postFullWindowExpose(Display *display, Window window)
@@ -92,11 +92,12 @@ void postExposeEvent(Display *display,
     if (!childDamagedAreaList)
         return;
 
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     for (i = 0; i < GET_WINDOW_STRUCT(window)->children.length; i++) {
-        if (!IS_INPUT_ONLY(children[i]) &&
-            GET_WINDOW_STRUCT(children[i])->mapState == Mapped) {
-            WindowStruct *childWindowStruct = GET_WINDOW_STRUCT(children[i]);
+        if (!IS_INPUT_ONLY(CHILD_AT(children, i)) &&
+            GET_WINDOW_STRUCT(CHILD_AT(children, i))->mapState == Mapped) {
+            WindowStruct *childWindowStruct =
+                GET_WINDOW_STRUCT(CHILD_AT(children, i));
             SDL_Rect childWindowRect = {
                 childWindowStruct->x,
                 childWindowStruct->y,
@@ -111,8 +112,8 @@ void postExposeEvent(Display *display,
                 }
             }
             if (numChildAreas > 0) {
-                postExposeEvent(display, children[i], childDamagedAreaList,
-                                numChildAreas);
+                postExposeEvent(display, CHILD_AT(children, i),
+                                childDamagedAreaList, numChildAreas);
             }
         }
     }
@@ -131,14 +132,15 @@ void postExposeEventsForMappedChildren(Display *display,
     if (!childDamagedAreaList)
         return;
 
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     for (size_t i = 0; i < GET_WINDOW_STRUCT(window)->children.length; i++) {
-        if (IS_INPUT_ONLY(children[i]) ||
-            GET_WINDOW_STRUCT(children[i])->mapState != Mapped) {
+        if (IS_INPUT_ONLY(CHILD_AT(children, i)) ||
+            GET_WINDOW_STRUCT(CHILD_AT(children, i))->mapState != Mapped) {
             continue;
         }
 
-        WindowStruct *childWindowStruct = GET_WINDOW_STRUCT(children[i]);
+        WindowStruct *childWindowStruct =
+            GET_WINDOW_STRUCT(CHILD_AT(children, i));
         SDL_Rect childWindowRect = {
             childWindowStruct->x,
             childWindowStruct->y,
@@ -153,8 +155,8 @@ void postExposeEventsForMappedChildren(Display *display,
             }
         }
         if (numChildAreas > 0) {
-            postExposeEvent(display, children[i], childDamagedAreaList,
-                            numChildAreas);
+            postExposeEvent(display, CHILD_AT(children, i),
+                            childDamagedAreaList, numChildAreas);
         }
     }
     free(childDamagedAreaList);

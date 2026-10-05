@@ -358,8 +358,13 @@ extern Window SCREEN_WINDOW;
 #define GET_VISUAL(window) GET_WINDOW_STRUCT(window)->visual
 #define GET_COLORMAP(window) GET_WINDOW_STRUCT(window)->colormap
 #define GET_PARENT(window) GET_WINDOW_STRUCT(window)->parent
-#define GET_CHILDREN(window) \
-    ((Window *) GET_WINDOW_STRUCT(window)->children.array)
+/* A window's children live in a generic Array of void * slots. Window is an
+ * unsigned long, narrower than a pointer on LLP64 (64-bit Windows), so the
+ * slots must be converted one by one with CHILD_AT, never reinterpreted as a
+ * Window[] (which only happens to work where long and pointers match).
+ */
+#define GET_CHILDREN(window) (GET_WINDOW_STRUCT(window)->children.array)
+#define CHILD_AT(children, index) ((Window) (uintptr_t) (children)[index])
 #define IS_TOP_LEVEL(window) \
     (window != SCREEN_WINDOW && GET_PARENT(window) == SCREEN_WINDOW)
 #define IS_MAPPED_TOP_LEVEL_WINDOW(window) \

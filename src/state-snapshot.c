@@ -463,9 +463,9 @@ static void populateSnapshot(Display *display, UiSnapshot *snap)
         return;
     }
     WindowStruct *screen = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     for (size_t i = 0; i < screen->children.length; i++) {
-        Window child = children[i];
+        Window child = CHILD_AT(children, i);
         WindowStruct *cws = GET_WINDOW_STRUCT(child);
 
         /* Internal windows (the hidden clipboard requestor, the EWMH

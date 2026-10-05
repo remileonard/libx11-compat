@@ -46,10 +46,10 @@ static Bool clampBorrowedOverlayToHost(Window window)
         return False;
 
     WindowStruct *screen = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     WindowStruct *host = NULL;
     for (size_t i = 0; i < screen->children.length; i++) {
-        Window child = children[i];
+        Window child = CHILD_AT(children, i);
         if (child == window || !IS_TYPE(child, WINDOW))
             continue;
         WindowStruct *candidate = GET_WINDOW_STRUCT(child);
@@ -288,10 +288,10 @@ static void destroyScreenWindowImpl(Display *display)
     requireMainEventThread("destroyScreenWindow");
     if (SCREEN_WINDOW != None) {
         size_t i;
-        Window *children = GET_CHILDREN(SCREEN_WINDOW);
+        void **children = GET_CHILDREN(SCREEN_WINDOW);
         WindowStruct *windowStruct = GET_WINDOW_STRUCT(SCREEN_WINDOW);
         for (i = 0; i < windowStruct->children.length; i++)
-            destroyWindow(display, children[i], False);
+            destroyWindow(display, CHILD_AT(children, i), False);
 
         /* A grab taken directly on the root survives the child teardown above,
          * so drop it before SCREEN_WINDOW goes away to avoid stale grab state
@@ -516,7 +516,7 @@ static Bool decoratedWindowOffsetAt(int logicalX,
         return False;
 
     WindowStruct *screenStruct = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     Window nearest = None;
     int64_t nearestDistSq = 0;
 
@@ -524,7 +524,7 @@ static Bool decoratedWindowOffsetAt(int logicalX,
      * the top-most owner the menu was posted from.
      */
     for (size_t i = screenStruct->children.length; i-- > 0;) {
-        Window child = children[i];
+        Window child = CHILD_AT(children, i);
         WindowStruct *childStruct = GET_WINDOW_STRUCT(child);
         if (!childStruct->sdlWindow || childStruct->overrideRedirect)
             continue;
@@ -576,11 +576,11 @@ static Bool decoratedWindowHostAnchorAt(int logicalX,
     *rootX = logicalX;
     *rootY = logicalY;
     WindowStruct *screenStruct = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     Window nearest = None;
     int64_t nearestDistSq = 0;
     for (size_t i = screenStruct->children.length; i-- > 0;) {
-        Window child = children[i];
+        Window child = CHILD_AT(children, i);
         WindowStruct *childStruct = GET_WINDOW_STRUCT(child);
         if (!childStruct->sdlWindow || childStruct->overrideRedirect)
             continue;
@@ -745,9 +745,9 @@ static ptrdiff_t rootStackIndex(Window window)
     WindowStruct *screenStruct = GET_WINDOW_STRUCT(SCREEN_WINDOW);
     if (!screenStruct)
         return -1;
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     for (size_t i = 0; i < screenStruct->children.length; i++)
-        if (children[i] == window)
+        if (CHILD_AT(children, i) == window)
             return (ptrdiff_t) i;
     return -1;
 }
@@ -956,9 +956,9 @@ void postResizeConfigureForMappedChildren(Display *display,
                                           int newHeight)
 {
     WindowStruct *windowStruct = GET_WINDOW_STRUCT(window);
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     for (size_t i = 0; i < windowStruct->children.length; i++) {
-        Window child = children[i];
+        Window child = CHILD_AT(children, i);
         WindowStruct *childStruct = GET_WINDOW_STRUCT(child);
         if (childStruct->mapState != Mapped)
             continue;
@@ -1010,9 +1010,9 @@ Window getDirectChildContainingPoint(Window window, int x, int y)
     if (window == None || !IS_TYPE(window, WINDOW))
         return None;
 
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     for (size_t i = GET_WINDOW_STRUCT(window)->children.length; i > 0; i--) {
-        Window child = children[i - 1];
+        Window child = CHILD_AT(children, i - 1);
         if (!isWindowEffectivelyViewable(child))
             continue;
         WindowStruct *childStruct = GET_WINDOW_STRUCT(child);
@@ -1054,8 +1054,8 @@ void removeChildFromParent(Window child)
          * stale.
          */
         invalidateVisibleRegionForTopLevel(child);
-        ssize_t childIndex =
-            findInArray(&GET_WINDOW_STRUCT(parent)->children, (void *) child);
+        ssize_t childIndex = findInArray(&GET_WINDOW_STRUCT(parent)->children,
+                                         (void *) (uintptr_t) child);
         if (childIndex != -1) {
             removeArray(&GET_WINDOW_STRUCT(parent)->children,
                         (size_t) childIndex, True);
@@ -1090,11 +1090,11 @@ static void restoreMappedCanvasAfterDestroy(Window destroyed)
         return;
 
     WindowStruct *screen = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     WindowStruct *best = NULL;
     uint64_t bestArea = 0;
     for (size_t i = 0; i < screen->children.length; i++) {
-        Window sibling = children[i];
+        Window sibling = CHILD_AT(children, i);
         if (sibling == destroyed || !IS_TYPE(sibling, WINDOW))
             continue;
         WindowStruct *ws = GET_WINDOW_STRUCT(sibling);
@@ -1136,9 +1136,9 @@ void destroyWindow(Display *display, Window window, Bool freeParentData)
 
     size_t i;
     WindowStruct *windowStruct = GET_WINDOW_STRUCT(window);
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     for (i = 0; i < windowStruct->children.length; i++)
-        destroyWindow(display, children[i], False);
+        destroyWindow(display, CHILD_AT(children, i), False);
 
     /* Unmap any SDL3 xdg_popup anchored to this window before its SDL window is
      * destroyed below. An override-redirect popup is a sibling under the root,
@@ -1239,10 +1239,10 @@ void destroyWindow(Display *display, Window window, Bool freeParentData)
     if (windowStruct->sdlWindow && !windowStruct->borrowedSdlWindow &&
         SCREEN_WINDOW != None) {
         SDL_Window *shared = windowStruct->sdlWindow;
-        Window *screenChildren = GET_CHILDREN(SCREEN_WINDOW);
+        void **screenChildren = GET_CHILDREN(SCREEN_WINDOW);
         size_t childCount = GET_WINDOW_STRUCT(SCREEN_WINDOW)->children.length;
         for (size_t k = 0; k < childCount; k++) {
-            Window sibling = screenChildren[k];
+            Window sibling = CHILD_AT(screenChildren, k);
             if (sibling == window || !IS_TYPE(sibling, WINDOW))
                 continue;
             WindowStruct *heir = GET_WINDOW_STRUCT(sibling);
@@ -1276,7 +1276,7 @@ void destroyWindow(Display *display, Window window, Bool freeParentData)
              * again.
              */
             for (size_t k = 0; k < childCount; k++) {
-                Window sibling = screenChildren[k];
+                Window sibling = CHILD_AT(screenChildren, k);
                 if (sibling == window || !IS_TYPE(sibling, WINDOW))
                     continue;
                 WindowStruct *b = GET_WINDOW_STRUCT(sibling);
@@ -1366,11 +1366,12 @@ void destroyWindow(Display *display, Window window, Bool freeParentData)
  */
 Bool addChildToWindow(Window parent, Window child)
 {
-    if (findInArray(&GET_WINDOW_STRUCT(parent)->children, (void *) child) >=
-        0) {
+    if (findInArray(&GET_WINDOW_STRUCT(parent)->children,
+                    (void *) (uintptr_t) child) >= 0) {
         return False;
     }
-    if (insertArray(&GET_WINDOW_STRUCT(parent)->children, (void *) child)) {
+    if (insertArray(&GET_WINDOW_STRUCT(parent)->children,
+                    (void *) (uintptr_t) child)) {
         GET_WINDOW_STRUCT(child)->parent = parent;
         return True;
     }
@@ -1380,16 +1381,16 @@ Bool addChildToWindow(Window parent, Window child)
 Bool insertChildIntoWindow(Window parent, Window child, size_t index)
 {
     Array *children = &GET_WINDOW_STRUCT(parent)->children;
-    if (findInArray(children, (void *) child) >= 0)
+    if (findInArray(children, (void *) (uintptr_t) child) >= 0)
         return False;
-    if (!insertArray(children, (void *) child))
+    if (!insertArray(children, (void *) (uintptr_t) child))
         return False;
     if (index >= children->length)
         index = children->length - 1;
     if (index + 1 < children->length) {
         memmove(&children->array[index + 1], &children->array[index],
                 sizeof(void *) * (children->length - index - 1));
-        children->array[index] = (void *) child;
+        children->array[index] = (void *) (uintptr_t) child;
     }
     GET_WINDOW_STRUCT(child)->parent = parent;
     return True;
@@ -1443,7 +1444,7 @@ Bool moveChildToIndex(Window window, size_t targetIndex)
     if (parent == None)
         return False;
     Array *children = &GET_WINDOW_STRUCT(parent)->children;
-    ssize_t index = findInArray(children, (void *) window);
+    ssize_t index = findInArray(children, (void *) (uintptr_t) window);
     if (index < 0)
         return False;
     if (targetIndex >= children->length)
@@ -1458,7 +1459,7 @@ Bool moveChildToIndex(Window window, size_t targetIndex)
                 &children->array[targetIndex],
                 sizeof(void *) * (children->length - targetIndex));
     }
-    children->array[targetIndex] = (void *) window;
+    children->array[targetIndex] = (void *) (uintptr_t) window;
     children->length++;
     invalidateVisibleRegionForTopLevel(window);
     return True;
@@ -1515,9 +1516,9 @@ static Bool collectRestackExposureSnapshots(Array *snapshots, Window window)
         return False;
     }
 
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     for (size_t i = 0; i < windowStruct->children.length; i++) {
-        if (!collectRestackExposureSnapshots(snapshots, children[i]))
+        if (!collectRestackExposureSnapshots(snapshots, CHILD_AT(children, i)))
             return False;
     }
     return True;
@@ -1534,9 +1535,9 @@ static void postFullExposeForMappedSubtree(Display *display, Window window)
         postEvent(display, window, Expose, &full, (size_t) 0);
     }
 
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     for (size_t i = 0; i < windowStruct->children.length; i++)
-        postFullExposeForMappedSubtree(display, children[i]);
+        postFullExposeForMappedSubtree(display, CHILD_AT(children, i));
 }
 
 static void postRestackExposureDiffs(Display *display, Array *snapshots)
@@ -1579,7 +1580,7 @@ Bool moveChildToIndexAndExpose(Display *display,
         return False;
 
     Array *children = &GET_WINDOW_STRUCT(parent)->children;
-    ssize_t index = findInArray(children, (void *) window);
+    ssize_t index = findInArray(children, (void *) (uintptr_t) window);
     if (index < 0)
         return False;
     if (targetIndex >= children->length)
@@ -1774,14 +1775,15 @@ void computeVisibleRegion(Window window, pixman_region32_t *out)
         if (parent == None || parent == SCREEN_WINDOW)
             break;
         WindowStruct *parentStruct = GET_WINDOW_STRUCT(parent);
-        Window *children = (Window *) parentStruct->children.array;
-        ssize_t curIndex = findInArray(&parentStruct->children, (void *) cur);
+        void **children = parentStruct->children.array;
+        ssize_t curIndex =
+            findInArray(&parentStruct->children, (void *) (uintptr_t) cur);
         if (curIndex < 0)
             break;
 
         for (size_t i = (size_t) (curIndex + 1);
              i < parentStruct->children.length; i++) {
-            Window sibling = children[i];
+            Window sibling = CHILD_AT(children, i);
             if (sibling == None || !IS_TYPE(sibling, WINDOW))
                 continue;
 
@@ -1846,9 +1848,9 @@ static void invalidateVisibleRegionSubtree(Window window)
      * instead of reading freed pixman rect storage.
      */
     invalidatePrimitiveClipCache();
-    Window *children = (Window *) windowStruct->children.array;
+    void **children = windowStruct->children.array;
     for (size_t i = 0; i < windowStruct->children.length; i++)
-        invalidateVisibleRegionSubtree(children[i]);
+        invalidateVisibleRegionSubtree(CHILD_AT(children, i));
 }
 
 /* A move, resize, restack, or map-state change on "window" can shift the
@@ -1877,9 +1879,9 @@ void invalidateVisibleRegionForTopLevel(Window window)
  */
 static Bool hasOccludingSiblingAbove(Array *children, size_t index)
 {
-    Window window = (Window) children->array[index];
+    Window window = (Window) (uintptr_t) children->array[index];
     for (size_t i = index + 1; i < children->length; i++) {
-        if (windowsOverlap(window, (Window) children->array[i]))
+        if (windowsOverlap(window, (Window) (uintptr_t) children->array[i]))
             return True;
     }
     return False;
@@ -1887,9 +1889,9 @@ static Bool hasOccludingSiblingAbove(Array *children, size_t index)
 
 static Bool hasOccludedSiblingBelow(Array *children, size_t index)
 {
-    Window window = (Window) children->array[index];
+    Window window = (Window) (uintptr_t) children->array[index];
     for (size_t i = 0; i < index; i++) {
-        if (windowsOverlap(window, (Window) children->array[i]))
+        if (windowsOverlap(window, (Window) (uintptr_t) children->array[i]))
             return True;
     }
     return False;
@@ -1908,7 +1910,7 @@ static Bool restackWindow(Display *display,
         return True;
 
     Array *children = &GET_WINDOW_STRUCT(parent)->children;
-    ssize_t index = findInArray(children, (void *) window);
+    ssize_t index = findInArray(children, (void *) (uintptr_t) window);
     if (index < 0)
         return False;
 
@@ -1920,7 +1922,8 @@ static Bool restackWindow(Display *display,
             handleError(0, display, window, 0, BadMatch, 0);
             return False;
         }
-        ssize_t siblingIndex = findInArray(children, (void *) values->sibling);
+        ssize_t siblingIndex =
+            findInArray(children, (void *) (uintptr_t) values->sibling);
         if (siblingIndex < 0)
             return False;
         size_t target = (size_t) siblingIndex;
@@ -2372,16 +2375,17 @@ Bool mergeWindowDrawables(Window parent, Window child)
 
 void mapRequestedChildren(Display *display, Window window)
 {
-    Window *children = GET_CHILDREN(window);
+    void **children = GET_CHILDREN(window);
     size_t i;
     for (i = 0; i < GET_WINDOW_STRUCT(window)->children.length; i++) {
-        if (children[i] == None)
+        if (CHILD_AT(children, i) == None)
             continue;
 
-        if (GET_WINDOW_STRUCT(children[i])->mapState == Mapped) {
-            WindowStruct *childStruct = GET_WINDOW_STRUCT(children[i]);
+        if (GET_WINDOW_STRUCT(CHILD_AT(children, i))->mapState == Mapped) {
+            WindowStruct *childStruct =
+                GET_WINDOW_STRUCT(CHILD_AT(children, i));
             if (childStruct->sdlTexture) {
-                if (!mergeWindowDrawables(window, children[i])) {
+                if (!mergeWindowDrawables(window, CHILD_AT(children, i))) {
                     LOG("Failed to merge mapped child drawables in %s\n",
                         __func__);
                     continue;
@@ -2389,28 +2393,30 @@ void mapRequestedChildren(Display *display, Window window)
             }
             childStruct->contentsMergedToParent = False;
             if (!childStruct->inputOnly) {
-                XClearArea(display, children[i], 0, 0, 0, 0, False);
+                XClearArea(display, CHILD_AT(children, i), 0, 0, 0, 0, False);
                 SDL_Rect exposeRect = {0, 0, childStruct->w, childStruct->h};
-                postExposeEvent(display, children[i], &exposeRect, 1);
+                postExposeEvent(display, CHILD_AT(children, i), &exposeRect, 1);
             }
-            mapRequestedChildren(display, children[i]);
-        } else if (GET_WINDOW_STRUCT(children[i])->mapState == MapRequested) {
-            if (!mergeWindowDrawables(window, children[i])) {
+            mapRequestedChildren(display, CHILD_AT(children, i));
+        } else if (GET_WINDOW_STRUCT(CHILD_AT(children, i))->mapState ==
+                   MapRequested) {
+            if (!mergeWindowDrawables(window, CHILD_AT(children, i))) {
                 LOG("Failed to merge the window drawables in %s\n", __func__);
                 return;
             }
-            WindowStruct *childStruct = GET_WINDOW_STRUCT(children[i]);
+            WindowStruct *childStruct =
+                GET_WINDOW_STRUCT(CHILD_AT(children, i));
             childStruct->mapState = Mapped;
             if (!childStruct->inputOnly && !childStruct->contentsMergedToParent)
-                XClearArea(display, children[i], 0, 0, 0, 0, False);
+                XClearArea(display, CHILD_AT(children, i), 0, 0, 0, 0, False);
             childStruct->contentsMergedToParent = False;
-            postEvent(display, children[i], MapNotify);
-            postEvent(display, children[i], VisibilityNotify);
+            postEvent(display, CHILD_AT(children, i), MapNotify);
+            postEvent(display, CHILD_AT(children, i), VisibilityNotify);
             if (!childStruct->inputOnly) {
                 SDL_Rect exposeRect = {0, 0, childStruct->w, childStruct->h};
-                postExposeEvent(display, children[i], &exposeRect, 1);
+                postExposeEvent(display, CHILD_AT(children, i), &exposeRect, 1);
             }
-            mapRequestedChildren(display, children[i]);
+            mapRequestedChildren(display, CHILD_AT(children, i));
         }
     }
 }

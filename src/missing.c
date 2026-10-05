@@ -1089,7 +1089,7 @@ int XChangeKeyboardMapping(register Display *dpy,
 
 static Window childAtIndex(Array *children, size_t index)
 {
-    return (Window) children->array[index];
+    return (Window) (uintptr_t) children->array[index];
 }
 
 /* RaiseLowest: raise the lowest mapped child that is occluded by another mapped
@@ -1098,15 +1098,15 @@ static Window childAtIndex(Array *children, size_t index)
 static void circulateChildrenUp(Display *dpy, Window w)
 {
     Array *childArray = &GET_WINDOW_STRUCT(w)->children;
-    Window *children = GET_CHILDREN(w);
+    void **children = GET_CHILDREN(w);
     if (childArray->length < 2)
         return;
     for (size_t i = 0; i < childArray->length; i++) {
-        if (GET_WINDOW_STRUCT(children[i])->mapState != Mapped)
+        if (GET_WINDOW_STRUCT(CHILD_AT(children, i))->mapState != Mapped)
             continue;
         for (size_t j = i + 1; j < childArray->length; j++) {
-            if (GET_WINDOW_STRUCT(children[j])->mapState == Mapped &&
-                windowsOverlap(children[i], children[j])) {
+            if (GET_WINDOW_STRUCT(CHILD_AT(children, j))->mapState == Mapped &&
+                windowsOverlap(CHILD_AT(children, i), CHILD_AT(children, j))) {
                 moveChildToIndexAndExpose(dpy, childAtIndex(childArray, i),
                                           childArray->length - 1);
                 return;
@@ -1121,15 +1121,15 @@ static void circulateChildrenUp(Display *dpy, Window w)
 static void circulateChildrenDown(Display *dpy, Window w)
 {
     Array *childArray = &GET_WINDOW_STRUCT(w)->children;
-    Window *children = GET_CHILDREN(w);
+    void **children = GET_CHILDREN(w);
     if (childArray->length < 2)
         return;
     for (size_t i = childArray->length; i-- > 0;) {
-        if (GET_WINDOW_STRUCT(children[i])->mapState != Mapped)
+        if (GET_WINDOW_STRUCT(CHILD_AT(children, i))->mapState != Mapped)
             continue;
         for (size_t j = 0; j < i; j++) {
-            if (GET_WINDOW_STRUCT(children[j])->mapState == Mapped &&
-                windowsOverlap(children[i], children[j])) {
+            if (GET_WINDOW_STRUCT(CHILD_AT(children, j))->mapState == Mapped &&
+                windowsOverlap(CHILD_AT(children, i), CHILD_AT(children, j))) {
                 moveChildToIndexAndExpose(dpy, childAtIndex(childArray, i), 0);
                 return;
             }

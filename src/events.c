@@ -793,13 +793,13 @@ void libx11CompatResetLiveResizeCoalesce(void)
 {
     if (SCREEN_WINDOW == None || !IS_TYPE(SCREEN_WINDOW, WINDOW))
         return;
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     size_t count = GET_WINDOW_STRUCT(SCREEN_WINDOW)->children.length;
     for (size_t i = 0; i < count; i++) {
-        if (!IS_TYPE(children[i], WINDOW))
+        if (!IS_TYPE(CHILD_AT(children, i), WINDOW))
             continue;
 
-        WindowStruct *ws = GET_WINDOW_STRUCT(children[i]);
+        WindowStruct *ws = GET_WINDOW_STRUCT(CHILD_AT(children, i));
         ws->liveResizeLastSeenW = 0;
         ws->liveResizeLastSeenH = 0;
         ws->liveResizeSettleTicks = 0;
@@ -1041,7 +1041,7 @@ int libx11CompatPresentDuringLiveResizeEx(int forceReflow)
     LR_TRACE("present\tenter depth=%d", liveResizePresentDepth);
 
     LibX11CompatLiveResizeReflowFn reflow = liveResizeReflowFn;
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     size_t count = GET_WINDOW_STRUCT(SCREEN_WINDOW)->children.length;
     Bool anyPending = False;
     Bool geometryChanged = False;
@@ -1059,7 +1059,7 @@ int libx11CompatPresentDuringLiveResizeEx(int forceReflow)
      */
     Bool presentThisTick = False;
     for (size_t i = 0; i < count; i++) {
-        Window window = children[i];
+        Window window = CHILD_AT(children, i);
         if (!IS_MAPPED_TOP_LEVEL_WINDOW(window))
             continue;
 
@@ -2069,9 +2069,9 @@ void postFocusChange(Display *display,
 static Bool enqueueResetExposures(Display *display)
 {
     WindowStruct *screen = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-    Window *children = GET_CHILDREN(SCREEN_WINDOW);
+    void **children = GET_CHILDREN(SCREEN_WINDOW);
     for (size_t i = screen->children.length; i > 0; i--) {
-        Window child = children[i - 1];
+        Window child = CHILD_AT(children, i - 1);
 
         /* A destroyed child lingers in the array typed CLOSED_WINDOW with a
          * NULL struct until the root's list is freed, so filter on the type
@@ -2949,9 +2949,9 @@ static Uint32 wasmInjectionWindowId(void)
         return SDL_GetWindowID(focus);
     if (SCREEN_WINDOW != None && IS_TYPE(SCREEN_WINDOW, WINDOW)) {
         WindowStruct *screen = GET_WINDOW_STRUCT(SCREEN_WINDOW);
-        Window *children = GET_CHILDREN(SCREEN_WINDOW);
+        void **children = GET_CHILDREN(SCREEN_WINDOW);
         for (size_t i = 0; i < screen->children.length; i++) {
-            Window child = children[i];
+            Window child = CHILD_AT(children, i);
             if (IS_TYPE(child, WINDOW)) {
                 WindowStruct *ws = GET_WINDOW_STRUCT(child);
                 if (ws && ws->sdlWindow && ws->mapState == Mapped &&
@@ -4375,13 +4375,14 @@ int convertEvent(Display *display,
         {
             Bool quitHandled = False;
             if (SCREEN_WINDOW != None && IS_TYPE(SCREEN_WINDOW, WINDOW)) {
-                Window *topLevels = GET_CHILDREN(SCREEN_WINDOW);
+                void **topLevels = GET_CHILDREN(SCREEN_WINDOW);
                 size_t topCount =
                     GET_WINDOW_STRUCT(SCREEN_WINDOW)->children.length;
                 Time quitTime =
                     (Time) XC_EVENT_TIME_MS(sdlEvent->quit.timestamp);
                 for (size_t i = 0; i < topCount; i++) {
-                    if (postWmDeleteIfHandled(display, topLevels[i], quitTime))
+                    if (postWmDeleteIfHandled(display, CHILD_AT(topLevels, i),
+                                              quitTime))
                         quitHandled = True;
                 }
             }
@@ -4654,7 +4655,7 @@ int convertEvent(Display *display,
             }
             if (sdlEvent->user.code == INTERNAL_EVENT_CODE) {
                 XAnyEvent *allocEvent = sdlEvent->user.data1;
-                eventWindow = (Window) sdlEvent->user.data2;
+                eventWindow = (Window) (uintptr_t) sdlEvent->user.data2;
                 type = allocEvent->type;
                 sendEvent = allocEvent->send_event;
                 serial = atomicLoadRequest(display);
@@ -4801,7 +4802,7 @@ int convertEvent(Display *display,
                 break;
             } else if (sdlEvent->user.code == SEND_EVENT_CODE) {
                 XEvent *sent = sdlEvent->user.data1;
-                Window sentWindow = (Window) sdlEvent->user.data2;
+                Window sentWindow = (Window) (uintptr_t) sdlEvent->user.data2;
                 if (clipboardConsumeInternalEvent(display, sentWindow,
                                                   sent->type, sent)) {
                     if (freeInternalEvents)
@@ -5093,7 +5094,7 @@ Bool enqueueEvent(Display *display, Window eventWindow, void *event)
         sdlEvent.type = sendEventType;
         sdlEvent.user.code = INTERNAL_EVENT_CODE;
         sdlEvent.user.data1 = event;
-        sdlEvent.user.data2 = (void *) eventWindow;
+        sdlEvent.user.data2 = (void *) (uintptr_t) eventWindow;
         LOG("Enqueuing event\n");
         int pushed = SDL_PushEvent(&sdlEvent);
         if (pushed != 1) {
@@ -5176,7 +5177,7 @@ Status XSendEvent(Display *display,
         sdlEvent.type = sendEventType;
         sdlEvent.user.code = SEND_EVENT_CODE;
         sdlEvent.user.data1 = copy;
-        sdlEvent.user.data2 = (void *) eventWindow;
+        sdlEvent.user.data2 = (void *) (uintptr_t) eventWindow;
         LOG("SEND event\n");
         if (SDL_PushEvent(&sdlEvent) != 1) {
             free(copy);
@@ -5251,12 +5252,12 @@ int XFlush(Display *display)
 static Window getSiblingBelow(Window window)
 {
     Window parent = GET_PARENT(window);
-    Window *children = GET_CHILDREN(parent);
+    void **children = GET_CHILDREN(parent);
     size_t i;
     for (i = 0; i < GET_WINDOW_STRUCT(parent)->children.length; i++) {
-        if (children[i] == window &&
+        if (CHILD_AT(children, i) == window &&
             i + 1 < GET_WINDOW_STRUCT(parent)->children.length) {
-            return children[i + 1];
+            return CHILD_AT(children, i + 1);
         }
     }
     return None;
@@ -5269,15 +5270,16 @@ static int getVisibilityState(Window window)
     Window parent = GET_PARENT(window);
     if (parent == None)
         return VisibilityUnobscured;
-    Window *children = GET_CHILDREN(parent);
+    void **children = GET_CHILDREN(parent);
     Bool foundSelf = False;
     for (size_t i = 0; i < GET_WINDOW_STRUCT(parent)->children.length; i++) {
-        if (children[i] == window) {
+        if (CHILD_AT(children, i) == window) {
             foundSelf = True;
             continue;
         }
-        if (foundSelf && GET_WINDOW_STRUCT(children[i])->mapState == Mapped &&
-            windowsOverlap(window, children[i])) {
+        if (foundSelf &&
+            GET_WINDOW_STRUCT(CHILD_AT(children, i))->mapState == Mapped &&
+            windowsOverlap(window, CHILD_AT(children, i))) {
             return VisibilityPartiallyObscured;
         }
     }

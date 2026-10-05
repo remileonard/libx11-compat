@@ -944,7 +944,7 @@ static char *setICListValues(XIC inputConnection,
                 return key;
             GET_XIC_STRUCT(inputConnection)->style = style;
         } else if (!strcmp(key, XNClientWindow)) {
-            Window clientWindow = (Window) attrs[i++];
+            Window clientWindow = (Window) (uintptr_t) attrs[i++];
             if (!IS_TYPE(clientWindow, WINDOW) ||
                 clientWindow == SCREEN_WINDOW) {
                 return key;
@@ -973,7 +973,7 @@ static char *setICListValues(XIC inputConnection,
             if (GET_XIC_STRUCT(inputConnection)->focus == None)
                 GET_XIC_STRUCT(inputConnection)->focus = clientWindow;
         } else if (!strcmp(key, XNFocusWindow)) {
-            Window focusWindow = (Window) attrs[i++];
+            Window focusWindow = (Window) (uintptr_t) attrs[i++];
             if (!IS_TYPE(focusWindow, WINDOW) || focusWindow == SCREEN_WINDOW)
                 return key;
             GET_XIC_STRUCT(inputConnection)->focus = focusWindow;
