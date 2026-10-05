@@ -138,3 +138,32 @@ render gate.
   and color-index rendering (Mentor `16.1.Overlay`, `17.1.ColorIndex`) are not
   drawn.
 - Spaceball and dial-box input devices report as absent.
+
+## Roadmap: Windows
+
+The longer-term goal is to run the same old X11/Motif and Open Inventor
+applications natively on Windows, with SDL3 as the window and input backend.
+Their original sources would need only minimal porting, without a Windows
+component library (`SoWin`, or Coin3D's) and with `SoXt` kept as it is. None of
+this exists yet. The work, in order:
+
+1. **libx11-compat on MinGW-w64, `SDL_BACKEND=sdl3`.** About 27 files in `src/`
+   and `compat/` use POSIX APIs: `pthread` (winpthreads or Win32 threads),
+   `dlopen`/`dlsym` (`LoadLibrary`/`GetProcAddress`, also for the EGL loader),
+   and `poll`/`select`/`unistd` in the event loop. Produce DLLs plus import
+   libraries, and gate the work with a cross-compiled build in CI, run under
+   Wine.
+2. **A GLX provider on Windows.** The Linux direct path (GLVND `libOpenGL` +
+   Mesa EGL) has no Windows counterpart. Candidates:
+   - Mesa for Windows (llvmpipe/d3d12) exposing desktop GL through EGL or WGL,
+     to keep the legacy GL 1.x surface Open Inventor relies on (`GL_SELECT`,
+     feedback, display lists);
+   - ANGLE + gl4es, the macOS path (GLES ceiling, see the GLX limitations in
+     the README);
+   - a WGL backend in `src/glx.c`, with SDL3 owning the window.
+3. **Motif (libXm/libMrm) and libXt-compat under MinGW** (autotools in an
+   MSYS2 environment, or a CMake/Make rewrite of the build).
+4. **Open Inventor**: `libimage`, `libFL` (FreeType and the font directory),
+   `libInventor` and `libSoXt`, then the Mentor examples. Validate with the
+   same `check-open-inventor` link audit (resolving DLLs instead of `ldd`) and
+   headless renders.
