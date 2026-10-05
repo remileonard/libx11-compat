@@ -7,8 +7,9 @@
  * stack) runs on a real compatibility-profile implementation.
  *
  * Checks, each fatal: the context is desktop GL (not GLES), GL_SELECT returns
- * the pushed name, GL_FEEDBACK emits a polygon token, and a display list drawn
- * inside glPushAttrib/glPopAttrib lands non-background pixels.
+ * the pushed name, GL_FEEDBACK emits a polygon token, a display list drawn
+ * inside glPushAttrib/glPopAttrib lands non-background pixels, and a GLXPixmap
+ * (pbuffer-backed) renders and reads back.
  *
  * --once exits after the checks; without it the scene keeps redrawing so
  * scripts/glx-snapshot.sh can capture a frame.
@@ -125,6 +126,26 @@ int main(int argc, char **argv)
     CHECK(!(px[0] == 51 && px[1] == 51 && px[2] == 51),
           "display list drew nothing over the background");
     CHECK(glGetError() == GL_NO_ERROR, "glGetError");
+
+    /* GLX 1.0 pixmap drawable (pbuffer-backed), the SoOffscreenRenderer path.
+     */
+    Pixmap xpix = XCreatePixmap(dpy, root, 64, 64, (unsigned) vi->depth);
+    GLXPixmap glxpix = glXCreateGLXPixmap(dpy, vi, xpix);
+    CHECK(glxpix != None, "glXCreateGLXPixmap");
+    GLXContext pixCtx = glXCreateContext(dpy, vi, NULL, False);
+    CHECK(pixCtx && glXMakeCurrent(dpy, glxpix, pixCtx),
+          "glXMakeCurrent on a GLXPixmap");
+    glViewport(0, 0, 64, 64);
+    glClearColor(0, 0, 1, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glFinish();
+    glReadPixels(32, 32, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px);
+    printf("GLXPixmap px = %u,%u,%u\n", px[0], px[1], px[2]);
+    CHECK(px[0] == 0 && px[1] == 0 && px[2] == 255, "GLXPixmap clear color");
+    CHECK(glXMakeCurrent(dpy, win, ctx), "glXMakeCurrent back to the window");
+    glXDestroyContext(dpy, pixCtx);
+    glXDestroyGLXPixmap(dpy, glxpix);
+    XFreePixmap(dpy, xpix);
     fflush(stdout);
 
     if (once) {

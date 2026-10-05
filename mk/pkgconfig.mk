@@ -6,6 +6,7 @@ PKGCONFIG_FILES := \
     $(PKGCONFIG_DIR)/xmu.pc \
     $(PKGCONFIG_DIR)/xext.pc \
     $(PKGCONFIG_DIR)/xinerama.pc \
+    $(PKGCONFIG_DIR)/xi.pc \
     $(PKGCONFIG_DIR)/ice.pc \
     $(PKGCONFIG_DIR)/sm.pc \
     $(PKGCONFIG_DIR)/xaw7.pc \
@@ -73,6 +74,10 @@ $(PKGCONFIG_DIR)/xext.pc: $(UPSTREAM_HEADERS_STAMP) mk/pkgconfig.mk | $(PKGCONFI
 $(PKGCONFIG_DIR)/xinerama.pc: $(UPSTREAM_HEADERS_STAMP) mk/pkgconfig.mk | $(PKGCONFIG_DIR)
 	@echo "  PC      $@"
 	$(call write_pc,xinerama,1.1,-lXinerama-compat -lX11-compat,)
+
+$(PKGCONFIG_DIR)/xi.pc: $(UPSTREAM_HEADERS_STAMP) mk/pkgconfig.mk | $(PKGCONFIG_DIR)
+	@echo "  PC      $@"
+	$(call write_pc,xi,1.8.3,-lXi-compat -lX11-compat,)
 
 $(PKGCONFIG_DIR)/ice.pc: $(UPSTREAM_HEADERS_STAMP) mk/pkgconfig.mk | $(PKGCONFIG_DIR)
 	@echo "  PC      $@"

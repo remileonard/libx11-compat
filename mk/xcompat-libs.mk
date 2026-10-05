@@ -10,12 +10,14 @@ else
 XMU_COMPAT_TARGET  := $(OUT)/libXmu-compat.so
 endif
 XINERAMA_COMPAT_TARGET := $(OUT)/libXinerama-compat.so
+XI_COMPAT_TARGET := $(OUT)/libXi-compat.so
 ICE_COMPAT_TARGET := $(OUT)/libICE-compat.so
 SM_COMPAT_TARGET := $(OUT)/libSM-compat.so
 XFT_COMPAT_TARGET := $(OUT)/libXft-compat.so
 XEXT_COMPAT_LDFLAGS := $(call shared_lib_rpath_ldflags,$(notdir $(XEXT_COMPAT_TARGET)))
 XMU_COMPAT_LDFLAGS  := $(call shared_lib_rpath_ldflags,$(notdir $(XMU_COMPAT_TARGET)))
 XINERAMA_COMPAT_LDFLAGS := $(call shared_lib_rpath_ldflags,$(notdir $(XINERAMA_COMPAT_TARGET)))
+XI_COMPAT_LDFLAGS := $(call shared_lib_rpath_ldflags,$(notdir $(XI_COMPAT_TARGET)))
 ICE_COMPAT_LDFLAGS := $(call shared_lib_rpath_ldflags,$(notdir $(ICE_COMPAT_TARGET)))
 SM_COMPAT_LDFLAGS := $(call shared_lib_rpath_ldflags,$(notdir $(SM_COMPAT_TARGET)))
 XFT_COMPAT_LDFLAGS := $(call shared_lib_rpath_ldflags,$(notdir $(XFT_COMPAT_TARGET)))
@@ -63,6 +65,10 @@ $(OUT)/xinerama-compat.o: compat/xinerama-compat.c $(UPSTREAM_HEADERS_STAMP) \
     $(SDL_BACKEND_STAMP) | $(OUT)
 	$(cc_object)
 
+$(OUT)/xi-compat.o: compat/xi-compat.c $(UPSTREAM_HEADERS_STAMP) \
+    $(SDL_BACKEND_STAMP) | $(OUT)
+	$(cc_object)
+
 $(OUT)/ice-compat.o: compat/ice-compat.c $(UPSTREAM_HEADERS_STAMP) \
     $(SDL_BACKEND_STAMP) | $(OUT)
 	$(cc_object)
@@ -98,6 +104,11 @@ $(XINERAMA_COMPAT_TARGET): $(OUT)/xinerama-compat.o $(TARGET) | $(OUT)
 	$(Q)$(CC) $(LDFLAGS) $(XINERAMA_COMPAT_LDFLAGS) -shared -o $@ $< \
 	    -L$(OUT) -lX11-compat
 
+$(XI_COMPAT_TARGET): $(OUT)/xi-compat.o $(TARGET) | $(OUT)
+	@echo "  LD      $@"
+	$(Q)$(CC) $(LDFLAGS) $(XI_COMPAT_LDFLAGS) -shared -o $@ $< \
+	    -L$(OUT) -lX11-compat
+
 $(ICE_COMPAT_TARGET): $(OUT)/ice-compat.o | $(OUT)
 	@echo "  LD      $@"
 	$(Q)$(CC) $(LDFLAGS) $(ICE_COMPAT_LDFLAGS) -shared -o $@ $<
@@ -124,13 +135,15 @@ $(XFT_COMPAT_TARGET): $(OUT)/xft-compat.o $(TARGET) | $(OUT)
 	$(Q)$(CC) $(LDFLAGS) $(XFT_COMPAT_LDFLAGS) $(XFT_COMPAT_NO_UNDEF) -shared -o $@ $< \
 	    -L$(OUT) -lX11-compat $(LDLIBS)
 
-.PHONY: xext xmu xinerama ice sm xft
+.PHONY: xext xmu xinerama xi ice sm xft
 ## Build the libXext compatibility shared library
 xext: $(XEXT_COMPAT_TARGET)
 ## Build the minimal libXmu compatibility shared library
 xmu: $(XMU_COMPAT_TARGET)
 ## Build the minimal libXinerama compatibility shared library
 xinerama: $(XINERAMA_COMPAT_TARGET)
+## Build the minimal libXi (XInput 1.x, no extra devices) compatibility library
+xi: $(XI_COMPAT_TARGET)
 ## Build the minimal libICE compatibility shared library
 ice: $(ICE_COMPAT_TARGET)
 ## Build the minimal libSM compatibility shared library
@@ -139,10 +152,10 @@ sm: $(SM_COMPAT_TARGET)
 xft: $(XFT_COMPAT_TARGET)
 
 # The wasm leg builds only Xext/Xmu (on demand, as app prerequisites); the
-# aggregate all stays native. The other four compat libs are native-only.
+# aggregate all stays native. The other five compat libs are native-only.
 ifneq ($(WASM),1)
 all: $(XEXT_COMPAT_TARGET) $(XMU_COMPAT_TARGET) $(XINERAMA_COMPAT_TARGET) \
-    $(ICE_COMPAT_TARGET) $(SM_COMPAT_TARGET) $(XFT_COMPAT_TARGET)
+    $(XI_COMPAT_TARGET) $(ICE_COMPAT_TARGET) $(SM_COMPAT_TARGET) $(XFT_COMPAT_TARGET)
 endif
 
 # Header-dependency files are -included by mk/deps.mk via $(ALL_DEPS).

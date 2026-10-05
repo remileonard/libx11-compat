@@ -1958,6 +1958,8 @@ static const struct {
     {"glXCreateContextAttribsARB",
      (__GLXextFuncPtr) glXCreateContextAttribsARB},
     {"glXCreateWindow", (__GLXextFuncPtr) glXCreateWindow},
+    {"glXCreateGLXPixmap", (__GLXextFuncPtr) glXCreateGLXPixmap},
+    {"glXDestroyGLXPixmap", (__GLXextFuncPtr) glXDestroyGLXPixmap},
     {"glXDestroyWindow", (__GLXextFuncPtr) glXDestroyWindow},
     {"glXUseXFont", (__GLXextFuncPtr) glXUseXFont},
     {"glXCreatePbuffer", (__GLXextFuncPtr) glXCreatePbuffer},
@@ -2320,6 +2322,67 @@ void glXDestroyPbuffer(Display *dpy, GLXPbuffer pbuf)
     if (eglIsAvailable())
         glxDrawableDestroyed(pbuf);
     FREE_XID(pbuf);
+}
+
+/* GLX 1.0 pixmap drawable (offscreen renderers, e.g. Open Inventor's
+ * SoOffscreenRenderer). There is no X server to share a pixmap's storage with
+ * GL, so the GLXPixmap is an EGL pbuffer sized to the X pixmap and typed as a
+ * pbuffer resource: rendering lands in the pbuffer and is read back with
+ * glReadPixels, while the X pixmap's own contents are left untouched. The
+ * config is the visual's own (or the lazy visual's choice, which matches what a
+ * context realized from the same visual picks), so the context binds to it.
+ */
+GLXPixmap glXCreateGLXPixmap(Display *dpy, XVisualInfo *vis, Pixmap pixmap)
+{
+    if (!eglLoad() || !vis || pixmap == None || GET_XID_TYPE(pixmap) != PIXMAP)
+        return None;
+    VisualConfig vc;
+    if (!lookupVisual(vis->visualid, &vc) || !eglEnsureReady())
+        return None;
+
+    EGLConfig config = vc.config;
+    if (vc.lazy) {
+        EGLint eglAttribs[64];
+        Bool doubleBuffered;
+        int written = translateVisualAttribs(vc.glxAttribs, eglAttribs, 64,
+                                             &doubleBuffered);
+        if (written < 0 ||
+            chooseEglConfigs(eglAttribs, written, &config, 1) < 1)
+            return None;
+    }
+
+    Window root;
+    int x, y;
+    unsigned int width, height, border, depth;
+    if (!XGetGeometry(dpy, pixmap, &root, &x, &y, &width, &height, &border,
+                      &depth) ||
+        width == 0 || height == 0)
+        return None;
+
+    const EGLint pbufferAttribs[] = {EGL_WIDTH, (EGLint) width, EGL_HEIGHT,
+                                     (EGLint) height, EGL_NONE};
+    EGLSurface surface = eglApi()->createPbufferSurface(eglDefaultDisplay(),
+                                                        config, pbufferAttribs);
+    if (surface == EGL_NO_SURFACE)
+        return None;
+
+    GLXPixmap id = ALLOC_XID();
+    if (id == None) {
+        eglApi()->destroySurface(eglDefaultDisplay(), surface);
+        return None;
+    }
+    SET_XID_TYPE(id, GLX_PBUFFER_RESOURCE);
+    if (registerDrawableSurface(id, surface, width, height, False) ==
+        EGL_NO_SURFACE) {
+        FREE_XID(id);
+        return None;
+    }
+    return id;
+}
+
+void glXDestroyGLXPixmap(Display *dpy, GLXPixmap pix)
+{
+    glXDestroyPbuffer(dpy, pix);
 }
 
 void glXQueryDrawable(Display *dpy,

@@ -13,7 +13,7 @@ ifeq ($(WASM),1)
 # safe now that HOST_CC is native (the libXt StringDefs generator runs on the
 # build machine even while CC is emcc), so a wasm toolkit .d that lists
 # StringDefs.h no longer drags emcc into a host-tool build. The native-only
-# compat libs (Xext/Xft/Xinerama/ICE/SM) are not built here, so their depfiles
+# compat libs (Xext/Xft/Xinerama/Xi/ICE/SM) are not built here, so their depfiles
 # are omitted.
 ALL_DEPS += $(LIBXT_OBJS:.o=.d) $(LIBXPM_OBJS:.o=.d) $(LIBXAW_OBJS:.o=.d) \
             $(XMU_UPSTREAM_OBJS:.o=.d) $(XMU_COMPAT_OBJ:.o=.d)
@@ -21,6 +21,7 @@ else
 ALL_DEPS += $(OUT)/xext-compat.d \
             $(OUT)/xmu-compat.d \
             $(OUT)/xinerama-compat.d \
+            $(OUT)/xi-compat.d \
             $(OUT)/ice-compat.d \
             $(OUT)/sm-compat.d \
             $(OUT)/xft-compat.d

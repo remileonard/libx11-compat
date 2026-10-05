@@ -120,6 +120,14 @@ SOURCES = [
         "src_subdir": "src-libXaw",
         "src_take_all": True,
     },
+    {
+        # Headers only (XInput.h / XInput2.h): compat/xi-compat.c implements
+        # the stubbed XI 1.x surface toolkits probe for optional devices.
+        "name": "libXi",
+        "version": "libXi-1.8.3",
+        "url": "https://xorg.freedesktop.org/archive/individual/lib/libXi-1.8.3.tar.xz",
+        "sha256": "7ad60056f01af4f786cfe93b3a7707447711626fc8da2637bec71a90409babe5",
+    },
 ]
 
 # Build-system noise that we never want to extract.

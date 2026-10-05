@@ -178,6 +178,12 @@ extern GLXPbuffer glXCreatePbuffer(Display *dpy,
                                    GLXFBConfig config,
                                    const int *attribList);
 extern void glXDestroyPbuffer(Display *dpy, GLXPbuffer pbuf);
+
+/* GLX 1.0 pixmap drawable, backed by an offscreen pbuffer. */
+extern GLXPixmap glXCreateGLXPixmap(Display *dpy,
+                                    XVisualInfo *vis,
+                                    Pixmap pixmap);
+extern void glXDestroyGLXPixmap(Display *dpy, GLXPixmap pix);
 extern void glXQueryDrawable(Display *dpy,
                              GLXDrawable draw,
                              int attribute,

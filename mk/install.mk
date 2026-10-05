@@ -28,7 +28,7 @@ CODESIGN_RESIGN := $(if $(filter Darwin,$(UNAME_S)),codesign --force --sign - ,:
 
 # Libraries a downstream links by their standard X11 SONAME (each gets a
 # libNAME.so -> libNAME-compat.so alias).
-XCOMPAT_INSTALL_ALIASED := X11 Xft Xext Xt Xmu Xaw Xpm Xinerama ICE SM
+XCOMPAT_INSTALL_ALIASED := X11 Xft Xext Xt Xmu Xaw Xpm Xinerama Xi ICE SM
 ifeq ($(XCB),1)
 XCOMPAT_INSTALL_ALIASED += X11-xcb xcb
 endif

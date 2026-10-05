@@ -657,10 +657,12 @@ glXChooseFBConfig
 glXChooseVisual
 glXCreateContext
 glXCreateContextAttribsARB
+glXCreateGLXPixmap
 glXCreateNewContext
 glXCreatePbuffer
 glXCreateWindow
 glXDestroyContext
+glXDestroyGLXPixmap
 glXDestroyPbuffer
 glXDestroyWindow
 glXGetClientString
