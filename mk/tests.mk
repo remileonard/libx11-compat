@@ -130,7 +130,7 @@ check: check-unit
 	$(Q)$(MAKE) --no-print-directory check-differential
 
 ## GLX render tier: the desktop-GL-over-EGL/ANGLE screenshot gates (the Mesa
-## xdemos and Motif paperplane). Both sub-targets self-skip when GLX=0 or the
+## xdemos, Motif paperplane, and the direct libOpenGL path). Both sub-targets self-skip when GLX=0 or the
 ## runtime provider (ANGLE) is absent, so this is safe in any configuration and
 ## is the single entry point for the GLX rendering checks.
 .PHONY: check-glx
@@ -143,6 +143,8 @@ check-glx:
 	$(Q)$(MAKE) --no-print-directory check-paperplane-linux
 	@printf "$(BLUE)RUN$(RESET) check-gl4es-wrap\n"
 	$(Q)$(MAKE) --no-print-directory check-gl4es-wrap
+	@printf "$(BLUE)RUN$(RESET) check-glx-direct\n"
+	$(Q)$(MAKE) --no-print-directory check-glx-direct
 
 ## Run all system-libX11-vs-libx11-compat differential checks
 check-differential: $(DIFFERENTIAL_TARGETS)

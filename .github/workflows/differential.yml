@@ -1273,7 +1273,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             ${{ env.COMMON_BUILD_PKGS }} \
-            libegl-dev libgles-dev libgl1-mesa-dri xvfb
+            libegl-dev libgles-dev libopengl-dev libgl1-mesa-dri xvfb
 
       - name: Run GLX differential (local, Mesa under Xvfb)
         env:
@@ -1289,6 +1289,12 @@ jobs:
       - name: Render Mesa xdemos (gl4es -> system Mesa GLES, Xvfb)
         run: make GLX=1 check-mesa-demos
 
+      # Same Mesa provider, but no gl4es: gl* come from GLVND's gl-only
+      # libOpenGL and dispatch straight to the desktop compatibility context,
+      # covering the legacy GL 1.x paths (GL_SELECT, feedback, display lists).
+      - name: Render direct desktop-GL path (libOpenGL -> system Mesa, Xvfb)
+        run: make GLX=1 check-glx-direct
+
       - name: Upload GLX render outputs on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -1298,5 +1304,6 @@ jobs:
             build/glx-diff-glx.rgba
             build/glx-diff-egl.rgba
             build/mesa-demo-*.png
+            build/glx-direct.png
           if-no-files-found: warn
           retention-days: 7
