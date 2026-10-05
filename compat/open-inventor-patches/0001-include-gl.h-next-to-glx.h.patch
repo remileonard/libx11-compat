@@ -1,0 +1,55 @@
+Include GL/gl.h next to GL/glx.h in headers
+
+libx11-compat ships a trimmed GL/glx.h that, unlike Mesa's, does not pull in
+GL/gl.h (so GLES clients need no desktop GL headers). Open Inventor's headers
+that include only GL/glx.h, and the code built on them, rely on that implicit
+gl.h (GLenum, gl* entry points), so include it explicitly.
+
+diff --git a/apps/samples/widgets/MyTextureEditor.h b/apps/samples/widgets/MyTextureEditor.h
+index bba06a6..af60436 100644
+--- a/apps/samples/widgets/MyTextureEditor.h
++++ b/apps/samples/widgets/MyTextureEditor.h
+@@ -60,6 +60,7 @@
+ 
+ #include <X11/Intrinsic.h>
+ #include <Xm/Xm.h>
++#include <GL/gl.h>
+ #include <GL/glx.h>
+ #include <Inventor/Xt/SoXtComponent.h>
+ #include <Inventor/misc/SoCallbackList.h>
+diff --git a/lib/database/include/Inventor/SoOffscreenRenderer.h b/lib/database/include/Inventor/SoOffscreenRenderer.h
+index 5e478df..c68b5da 100644
+--- a/lib/database/include/Inventor/SoOffscreenRenderer.h
++++ b/lib/database/include/Inventor/SoOffscreenRenderer.h
+@@ -60,6 +60,7 @@
+ #define  _SO_OFFSCREEN_RENDERER_
+ 
+ #include <cstdio>
++#include <GL/gl.h>
+ #include <GL/glx.h>
+ #include <Inventor/SbColor.h>
+ #include <Inventor/SbViewportRegion.h>
+diff --git a/lib/database/include/Inventor/elements/SoWindowElement.h b/lib/database/include/Inventor/elements/SoWindowElement.h
+index 249ea89..6a5d8d6 100644
+--- a/lib/database/include/Inventor/elements/SoWindowElement.h
++++ b/lib/database/include/Inventor/elements/SoWindowElement.h
+@@ -57,6 +57,7 @@
+ #define  _SO_WINDOW_ELEMENT
+ 
+ #include <Inventor/elements/SoSubElement.h>
++#include <GL/gl.h>
+ #include <GL/glx.h>
+ 
+ class SoGLRenderAction;
+diff --git a/libSoXt/include/Inventor/Xt/SoXtGLWidget.h b/libSoXt/include/Inventor/Xt/SoXtGLWidget.h
+index 1966f18..d4d02cf 100644
+--- a/libSoXt/include/Inventor/Xt/SoXtGLWidget.h
++++ b/libSoXt/include/Inventor/Xt/SoXtGLWidget.h
+@@ -57,6 +57,7 @@
+ #define _SO_XT_GL_WIDGET_H_
+ 
+ #include <X11/Intrinsic.h>
++#include <GL/gl.h>
+ #include <GL/glx.h>
+ #include <Inventor/Xt/SoXtComponent.h>
+ 

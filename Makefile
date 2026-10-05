@@ -52,6 +52,7 @@ include mk/micropolis.mk
 include mk/gl4es.mk
 include mk/mesa-demos.mk
 include mk/glx-direct.mk
+include mk/open-inventor.mk
 include mk/tests.mk
 include mk/examples.mk
 include mk/wasm-deps.mk

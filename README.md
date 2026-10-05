@@ -100,6 +100,17 @@ but each exercises behavior that small examples do not reach.
   Motif's GLw OpenGL-widget path runs too: the classic `paperplane` demo drives a `GLwDrawingArea` through the in-tree GLX-over-EGL layer, so live Motif menus and an animated 3D scene render together with no X server and no desktop-GL driver (desktop GL 1.x/2.x is translated by the bundled [gl4es](https://github.com/ptitSeb/gl4es) to [ANGLE](https://github.com/google/angle)'s GLES on Metal, with surfaceless Mesa as the Linux provider). See [GLX and OpenGL](#glx-and-opengl) for the capability and its limits.
 
   <a href="assets/paperplane.png"><img src="assets/paperplane.png" alt="Motif paperplane GLw/GLX demo running through libx11-compat on macOS" width="420"></a>
+- [Open Inventor](https://github.com/aumuell/open-inventor): SGI's scene-graph toolkit builds against the compatibility stack (Linux, `GLX=1`), including its Motif viewers (`SoXt`, linked to the in-tree Motif) and the *Inventor Mentor* / *Toolmaker* examples; 54 of the 66 Mentor examples render headless, and the rest are console programs, need arguments or input, or need overlay planes.
+  It renders through the direct desktop-GL path (GLVND `libOpenGL` on Mesa, no gl4es), with GLU built in-tree, and `check-open-inventor` audits that no host X11/Motif/GL library is linked.
+  A few small patches live in `compat/open-inventor-patches/`; see [`docs/OPEN-INVENTOR.md`](docs/OPEN-INVENTOR.md).
+
+  <a href="assets/open-inventor.png"><img src="assets/open-inventor.png" alt="Open Inventor Mentor examples rendered through libx11-compat" width="420"></a>
+
+  ```sh
+  make GLX=1 open-inventor                          # Open Inventor, GLU, Motif
+  scripts/run-open-inventor.sh 02.4.Examiner        # launch a Mentor example
+  scripts/run-open-inventor.sh                      # list the built programs
+  ```
 - [ViolaWWW](https://en.wikipedia.org/wiki/ViolaWWW): the 1992-era Motif web browser builds and runs out of the consolidated `build/` tree,
   loads HTTP pages over the network,
   renders inline XPM images through `libXpm-compat`,
@@ -284,14 +295,17 @@ GLX 1.3 is implemented in process as a thin translation onto EGL, resolved at ru
 
 Desktop GL 1.x/2.x is translated to GLES2 by the bundled [gl4es](https://github.com/ptitSeb/gl4es); its public `gl*` are baked into a static archive (`libgl4es.a`) that a client links directly, so a demo binary needs no dynamic desktop-GL library. Rendering works headless (an offscreen pbuffer is composited back to the window; `SDL_VIDEODRIVER=dummy` drives CI) and on screen through an ANGLE `CAMetalLayer` on macOS. It is exercised by the unmodified Mesa `xdemos` (glxgears, glxdemo, glxheads, sharedtex, multictx, glxswapcontrol) and the Motif `paperplane` GLw demo shown above.
 
+On Linux with Mesa there is also a direct desktop-GL path that skips gl4es: link the client against GLVND's gl-only `libOpenGL` (`-lOpenGL`, never `libGL.so`, whose `glX*` would shadow ours) and run it with GLVND's `libEGL.so.1` as the provider. The `glX*` calls then come from `libx11-compat`, which creates a Mesa desktop compatibility-profile context on EGL, and GLVND dispatches the client's `gl*` straight to it, so the full legacy GL 1.x surface (`GL_SELECT` picking, feedback, display lists, the attribute stack) is available. `make GLX=1 check-glx-direct` covers it, and [Open Inventor](#larger-workloads-under-investigation) is built on it.
+
 Limitations:
 - Not the GLX wire protocol; there is no indirect or networked GLX. It is in-process only.
-- No GLVND dispatch. A desktop-GL client that resolves `gl*` through the system GLVND / `libGL` dispatcher (for example `glxinfo`, or anything that `dlopen`s `libGL`) does not route into the translation: those `gl*` calls never reach the EGL context. A client renders only if its `gl*` bind to the linked gl4es archive, directly or through `glXGetProcAddress`. So this drives GLX clients whose OpenGL goes through gl4es, not arbitrary desktop-GL binaries.
-- GLES feature ceiling. Only what gl4es maps onto GLES2/3, and what the provider exposes, is available; desktop-GL features beyond that are not.
+- Only partial GLVND dispatch. The direct path above works for a client linked against `libOpenGL`; one that links or `dlopen`s `libGL.so` (for example `glxinfo`) gets GLVND's own `glX*` and never reaches the EGL context. Elsewhere, a client renders only if its `gl*` bind to the linked gl4es archive, directly or through `glXGetProcAddress`.
+- No front-buffer-only frames. A window is composited when it is swapped, so a frame drawn to `GL_FRONT` (or into a single-buffered visual) and only `glFlush`ed is not shown until the next swap. No overlay planes either: `glXChooseVisual` rejects a non-zero `GLX_LEVEL`.
+- GLES feature ceiling on the gl4es path. Only what gl4es maps onto GLES2/3, and what the provider exposes, is available; desktop-GL features beyond that are not.
 - Shared and multi-context rendering works (each `GLXContext` gets its own gl4es state), but some gl4es cross-context caches (shader programs, FBOs, queries) are only partially separated, so unusual object-sharing patterns can still misrender.
 - macOS specifics: ANGLE is opt-in (`make build-angle`), and the GL window is pinned to a 1:1 point-to-pixel drawable, so it fills the window at logical (non-native Retina) resolution.
 
-Treat GLX here as a migration bridge for GLX+Motif/GLw and other gl4es-linkable clients, not a general-purpose OpenGL runtime.
+Treat GLX here as a migration bridge for GLX+Motif/GLw clients (through gl4es, or the direct `libOpenGL` path on Linux), not a general-purpose OpenGL runtime.
 
 ## Porting an Existing Xlib Client
 

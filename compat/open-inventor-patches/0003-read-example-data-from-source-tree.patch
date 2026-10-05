@@ -1,0 +1,460 @@
+Read example data from the source tree
+
+The Mentor and Toolmaker examples open their .iv models and .rgb textures
+from a hard-coded /usr/share/src/Inventor/examples/data, which no install
+creates. Spell that prefix as an IVEXAMPLESDATADIR macro, defined by
+apps/examples/CMakeLists.txt as the source tree's apps/examples/data, so the
+examples find their data in the build tree. Generated mechanically:
+  sed 's|/usr/share/src/Inventor/examples/data|" IVEXAMPLESDATADIR "|g'
+
+diff --git a/apps/examples/CMakeLists.txt b/apps/examples/CMakeLists.txt
+index c01146c..42ed2eb 100644
+--- a/apps/examples/CMakeLists.txt
++++ b/apps/examples/CMakeLists.txt
+@@ -1,3 +1,7 @@
++# Example data (.iv models, .rgb textures) is read from the source tree, not
++# from a fixed install location.
++add_compile_definitions(IVEXAMPLESDATADIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
++
+ macro(ADD_EXAMPLE APP)
+     add_executable(${APP} ${ARGN})
+     target_link_libraries(${APP} InventorXt Inventor)
+diff --git a/apps/examples/Mentor/CXX/04.1.Cameras.c++ b/apps/examples/Mentor/CXX/04.1.Cameras.c++
+index 2b1fdbe..cbfd5f8 100644
+--- a/apps/examples/Mentor/CXX/04.1.Cameras.c++
++++ b/apps/examples/Mentor/CXX/04.1.Cameras.c++
+@@ -89,7 +89,7 @@ main(int, char **argv)
+ 
+    // Read the object from a file and add to the scene
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/parkbench.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/parkbench.iv")) 
+       exit (1);
+    SoSeparator *fileContents = SoDB::readAll(&myInput);
+    if (fileContents == NULL) 
+diff --git a/apps/examples/Mentor/CXX/05.6.TransformOrdering.c++ b/apps/examples/Mentor/CXX/05.6.TransformOrdering.c++
+index da6cb7b..51f93e0 100644
+--- a/apps/examples/Mentor/CXX/05.6.TransformOrdering.c++
++++ b/apps/examples/Mentor/CXX/05.6.TransformOrdering.c++
+@@ -95,7 +95,7 @@ main(int, char **argv)
+ 
+    // Read an object from file. (as in example 4.2.Lights)
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/temple.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/temple.iv")) 
+       exit (1);
+    SoSeparator *fileContents = SoDB::readAll(&myInput);
+    if (fileContents == NULL) 
+diff --git a/apps/examples/Mentor/CXX/06.1.Text.c++ b/apps/examples/Mentor/CXX/06.1.Text.c++
+index 18d3422..b4a7d41 100644
+--- a/apps/examples/Mentor/CXX/06.1.Text.c++
++++ b/apps/examples/Mentor/CXX/06.1.Text.c++
+@@ -82,7 +82,7 @@ main(int argc, char **argv)
+    sphereSep->addChild(myTexture2);
+    sphereSep->addChild(sphereComplexity);
+    sphereSep->addChild(new SoSphere);
+-   myTexture2->filename = "/usr/share/src/Inventor/examples/data/globe.rgb";
++   myTexture2->filename = "" IVEXAMPLESDATADIR "/globe.rgb";
+ 
+    // Add Text2 for AFRICA, translated to proper location.
+    SoSeparator *africaSep = new SoSeparator;
+diff --git a/apps/examples/Mentor/CXX/06.2.Simple3DText.c++ b/apps/examples/Mentor/CXX/06.2.Simple3DText.c++
+index 64eac8b..3c541ee 100644
+--- a/apps/examples/Mentor/CXX/06.2.Simple3DText.c++
++++ b/apps/examples/Mentor/CXX/06.2.Simple3DText.c++
+@@ -92,7 +92,7 @@ main(int, char **argv)
+    sphereSep->addChild(myTexture2);
+    sphereSep->addChild(sphereComplexity);
+    sphereSep->addChild(new SoSphere);
+-   myTexture2->filename = "/usr/share/src/Inventor/examples/data/globe.rgb";
++   myTexture2->filename = "" IVEXAMPLESDATADIR "/globe.rgb";
+ 
+    // Add Text3 for AFRICA, transformed to proper location.
+    SoSeparator *africaSep = new SoSeparator;
+diff --git a/apps/examples/Mentor/CXX/07.1.BasicTexture.c++ b/apps/examples/Mentor/CXX/07.1.BasicTexture.c++
+index 5ebca5c..0b64f6c 100644
+--- a/apps/examples/Mentor/CXX/07.1.BasicTexture.c++
++++ b/apps/examples/Mentor/CXX/07.1.BasicTexture.c++
+@@ -61,7 +61,7 @@ main(int , char **argv)
+    // Choose a texture 
+    SoTexture2 *rock = new SoTexture2;
+    root->addChild(rock);
+-   rock->filename.setValue("/usr/share/src/Inventor/examples/data/brick.1.rgb");
++   rock->filename.setValue("" IVEXAMPLESDATADIR "/brick.1.rgb");
+ 
+    // Make a cube
+    root->addChild(new SoCube);
+diff --git a/apps/examples/Mentor/CXX/07.2.TextureCoordinates.c++ b/apps/examples/Mentor/CXX/07.2.TextureCoordinates.c++
+index 6fbf626..3e65ef9 100644
+--- a/apps/examples/Mentor/CXX/07.2.TextureCoordinates.c++
++++ b/apps/examples/Mentor/CXX/07.2.TextureCoordinates.c++
+@@ -66,7 +66,7 @@ main(int , char **argv)
+    // Choose a texture 
+    SoTexture2 *brick = new SoTexture2;
+    root->addChild(brick);
+-   brick->filename.setValue("/usr/share/src/Inventor/examples/data/brick.1.rgb");
++   brick->filename.setValue("" IVEXAMPLESDATADIR "/brick.1.rgb");
+ 
+ #ifdef IV_STRICT
+    // This is the preferred code for Inventor 2.1 
+diff --git a/apps/examples/Mentor/CXX/07.3.TextureFunction.c++ b/apps/examples/Mentor/CXX/07.3.TextureFunction.c++
+index 424ca68..12c595e 100644
+--- a/apps/examples/Mentor/CXX/07.3.TextureFunction.c++
++++ b/apps/examples/Mentor/CXX/07.3.TextureFunction.c++
+@@ -69,7 +69,7 @@ main(int , char **argv)
+    // Choose a texture.
+    SoTexture2 *faceTexture = new SoTexture2;
+    root->addChild(faceTexture);
+-   faceTexture->filename.setValue("/usr/share/src/Inventor/examples/data/sillyFace.rgb");
++   faceTexture->filename.setValue("" IVEXAMPLESDATADIR "/sillyFace.rgb");
+ 
+    // Make the diffuse color pure white
+    SoMaterial *myMaterial = new SoMaterial;
+diff --git a/apps/examples/Mentor/CXX/08.1.BSCurve.c++ b/apps/examples/Mentor/CXX/08.1.BSCurve.c++
+index ffd47cb..ac672b9 100644
+--- a/apps/examples/Mentor/CXX/08.1.BSCurve.c++
++++ b/apps/examples/Mentor/CXX/08.1.BSCurve.c++
+@@ -79,7 +79,7 @@ static char *floorData =
+    "      scaleFactor 8 8\n"
+    "   }\n"
+    "   Texture2 {\n"
+-   "      filename /usr/share/src/Inventor/examples/data/oak.rgb\n"
++   "      filename " IVEXAMPLESDATADIR "/oak.rgb\n"
+    "   }\n"
+    "   NormalBinding {\n"
+    "        value  PER_PART\n"
+diff --git a/apps/examples/Mentor/CXX/08.2.UniCurve.c++ b/apps/examples/Mentor/CXX/08.2.UniCurve.c++
+index ef96517..2844f40 100644
+--- a/apps/examples/Mentor/CXX/08.2.UniCurve.c++
++++ b/apps/examples/Mentor/CXX/08.2.UniCurve.c++
+@@ -80,7 +80,7 @@ static char *floorData =
+    "      scaleFactor 8 8\n"
+    "   }\n"
+    "   Texture2 {\n"
+-   "      filename /usr/share/src/Inventor/examples/data/oak.rgb\n"
++   "      filename " IVEXAMPLESDATADIR "/oak.rgb\n"
+    "   }\n"
+    "   NormalBinding {\n"
+    "        value  PER_PART\n"
+diff --git a/apps/examples/Mentor/CXX/08.3.BezSurf.c++ b/apps/examples/Mentor/CXX/08.3.BezSurf.c++
+index c8cd45b..8d000bf 100644
+--- a/apps/examples/Mentor/CXX/08.3.BezSurf.c++
++++ b/apps/examples/Mentor/CXX/08.3.BezSurf.c++
+@@ -81,7 +81,7 @@ static char *floorData =
+    "      scaleFactor 8 8\n"
+    "   }\n"
+    "   Texture2 {\n"
+-   "      filename /usr/share/src/Inventor/examples/data/oak.rgb\n"
++   "      filename " IVEXAMPLESDATADIR "/oak.rgb\n"
+    "   }\n"
+    "   NormalBinding {\n"
+    "        value  PER_PART\n"
+@@ -212,7 +212,7 @@ main(int, char **argv)
+    SoTexture2   *tex    = new SoTexture2;
+ 
+    tex->ref();
+-   tex->filename.setValue("/usr/share/src/Inventor/examples/data/diamondRug.rgb");
++   tex->filename.setValue("" IVEXAMPLESDATADIR "/diamondRug.rgb");
+    carpet->addChild(tex);
+    carpet->addChild(surf);
+    root->addChild(carpet);
+diff --git a/apps/examples/Mentor/CXX/08.4.TrimSurf.c++ b/apps/examples/Mentor/CXX/08.4.TrimSurf.c++
+index b7a013d..e71fb5a 100644
+--- a/apps/examples/Mentor/CXX/08.4.TrimSurf.c++
++++ b/apps/examples/Mentor/CXX/08.4.TrimSurf.c++
+@@ -90,7 +90,7 @@ static char *floorData =
+    "      scaleFactor 8 8\n"
+    "   }\n"
+    "   Texture2 {\n"
+-   "      filename /usr/share/src/Inventor/examples/data/oak.rgb\n"
++   "      filename " IVEXAMPLESDATADIR "/oak.rgb\n"
+    "   }\n"
+    "   NormalBinding {\n"
+    "        value  PER_PART\n"
+@@ -275,7 +275,7 @@ main(int, char **argv)
+    SoTexture2   *tex    = new SoTexture2;
+ 
+    tex->ref();
+-   tex->filename.setValue("/usr/share/src/Inventor/examples/data/diamondRug.rgb");
++   tex->filename.setValue("" IVEXAMPLESDATADIR "/diamondRug.rgb");
+    carpet->addChild(tex);
+    carpet->addChild(surf);
+    root->addChild(carpet);
+diff --git a/apps/examples/Mentor/CXX/09.2.Texture.c++ b/apps/examples/Mentor/CXX/09.2.Texture.c++
+index 554e611..b358483 100644
+--- a/apps/examples/Mentor/CXX/09.2.Texture.c++
++++ b/apps/examples/Mentor/CXX/09.2.Texture.c++
+@@ -95,7 +95,7 @@ main(int, char **argv)
+    SoNode *result;
+ 
+    texRoot->ref();
+-   in.openFile("/usr/share/src/Inventor/examples/data/jumpyMan.iv");
++   in.openFile("" IVEXAMPLESDATADIR "/jumpyMan.iv");
+    SoDB::read(&in, result);
+ 
+    SoPerspectiveCamera *myCamera = new SoPerspectiveCamera;
+diff --git a/apps/examples/Mentor/CXX/09.3.Search.c++ b/apps/examples/Mentor/CXX/09.3.Search.c++
+index ee69218..674da83 100644
+--- a/apps/examples/Mentor/CXX/09.3.Search.c++
++++ b/apps/examples/Mentor/CXX/09.3.Search.c++
+@@ -59,7 +59,7 @@ main(int argc, char **argv)
+ 
+    // Open and read input scene graph
+    SoInput sceneInput;
+-   if (! sceneInput.openFile("/usr/share/src/Inventor/examples/data/bird.iv"))
++   if (! sceneInput.openFile("" IVEXAMPLESDATADIR "/bird.iv"))
+       return (1);
+ 
+    SoSeparator *root = SoDB::readAll(&sceneInput);
+diff --git a/apps/examples/Mentor/CXX/09.4.PickAction.c++ b/apps/examples/Mentor/CXX/09.4.PickAction.c++
+index 8cbf8af..468937f 100644
+--- a/apps/examples/Mentor/CXX/09.4.PickAction.c++
++++ b/apps/examples/Mentor/CXX/09.4.PickAction.c++
+@@ -128,7 +128,7 @@ main(int, char **argv)
+ 
+    // Read object data from a file
+    SoInput mySceneInput;
+-   if (!mySceneInput.openFile("/usr/share/src/Inventor/examples/data/star.iv")) 
++   if (!mySceneInput.openFile("" IVEXAMPLESDATADIR "/star.iv")) 
+       exit (1);
+    SoSeparator *starObject = SoDB::readAll(&mySceneInput);
+    if (starObject == NULL) exit (1);
+diff --git a/apps/examples/Mentor/CXX/10.6.PickFilterTopLevel.c++ b/apps/examples/Mentor/CXX/10.6.PickFilterTopLevel.c++
+index 3ab1757..4f0a7d2 100644
+--- a/apps/examples/Mentor/CXX/10.6.PickFilterTopLevel.c++
++++ b/apps/examples/Mentor/CXX/10.6.PickFilterTopLevel.c++
+@@ -86,7 +86,7 @@ main(int argc, char *argv[])
+     
+    // Open the data file
+    SoInput in;   
+-   char *datafile = "/usr/share/src/Inventor/examples/data/parkbench.iv";
++   char *datafile = "" IVEXAMPLESDATADIR "/parkbench.iv";
+    if (! in.openFile(datafile)) {
+       fprintf(stderr, "Cannot open %s for reading.\n", datafile);
+       exit(1);
+diff --git a/apps/examples/Mentor/CXX/11.1.ReadFile.c++ b/apps/examples/Mentor/CXX/11.1.ReadFile.c++
+index a426648..ca3f7ec 100644
+--- a/apps/examples/Mentor/CXX/11.1.ReadFile.c++
++++ b/apps/examples/Mentor/CXX/11.1.ReadFile.c++
+@@ -84,7 +84,7 @@ main(int argc, char **argv)
+    Widget myWindow = SoXt::init(argv[0]);
+ 
+    // Read the file
+-   SoSeparator *scene = readFile("/usr/share/src/Inventor/examples/data/bookshelf.iv");
++   SoSeparator *scene = readFile("" IVEXAMPLESDATADIR "/bookshelf.iv");
+ 
+    // Create a viewer
+    SoXtExaminerViewer *myViewer = 
+diff --git a/apps/examples/Mentor/CXX/13.2.ElapsedTime.c++ b/apps/examples/Mentor/CXX/13.2.ElapsedTime.c++
+index d011000..3697278 100644
+--- a/apps/examples/Mentor/CXX/13.2.ElapsedTime.c++
++++ b/apps/examples/Mentor/CXX/13.2.ElapsedTime.c++
+@@ -88,7 +88,7 @@ main(int , char **argv)
+ 
+    // Read the figure object from a file and add to the scene
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/jumpyMan.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/jumpyMan.iv")) 
+       exit (1);
+    SoSeparator *figureObject = SoDB::readAll(&myInput);
+    if (figureObject == NULL) 
+diff --git a/apps/examples/Mentor/CXX/13.3.TimeCounter.c++ b/apps/examples/Mentor/CXX/13.3.TimeCounter.c++
+index 26b15ca..171823b 100644
+--- a/apps/examples/Mentor/CXX/13.3.TimeCounter.c++
++++ b/apps/examples/Mentor/CXX/13.3.TimeCounter.c++
+@@ -93,7 +93,7 @@ main(int , char **argv)
+ 
+    // Read the man object from a file and add to the scene
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/jumpyMan.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/jumpyMan.iv")) 
+       exit (1);
+    SoSeparator *manObject = SoDB::readAll(&myInput);
+    if (manObject == NULL) 
+diff --git a/apps/examples/Mentor/CXX/13.4.Gate.c++ b/apps/examples/Mentor/CXX/13.4.Gate.c++
+index 5441969..8cd2f80 100644
+--- a/apps/examples/Mentor/CXX/13.4.Gate.c++
++++ b/apps/examples/Mentor/CXX/13.4.Gate.c++
+@@ -115,7 +115,7 @@ main(int , char **argv)
+ 
+    // Read the duck object from a file and add to the group
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/duck.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/duck.iv")) 
+       exit (1);
+    SoSeparator *duckObject = SoDB::readAll(&myInput);
+    if (duckObject == NULL) 
+diff --git a/apps/examples/Mentor/CXX/13.5.Boolean.c++ b/apps/examples/Mentor/CXX/13.5.Boolean.c++
+index 667ff7d..0197eee 100644
+--- a/apps/examples/Mentor/CXX/13.5.Boolean.c++
++++ b/apps/examples/Mentor/CXX/13.5.Boolean.c++
+@@ -118,7 +118,7 @@ main(int , char **argv)
+ 
+    // Read the duck object from a file and add to the group
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/duck.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/duck.iv")) 
+       exit (1);
+    SoSeparator *duckObject = SoDB::readAll(&myInput);
+    if (duckObject == NULL) 
+diff --git a/apps/examples/Mentor/CXX/13.6.Calculator.c++ b/apps/examples/Mentor/CXX/13.6.Calculator.c++
+index fced0bf..75a3830 100644
+--- a/apps/examples/Mentor/CXX/13.6.Calculator.c++
++++ b/apps/examples/Mentor/CXX/13.6.Calculator.c++
+@@ -85,7 +85,7 @@ main(int , char **argv)
+ 
+    // Read the background path from a file and add to the group
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/flowerPath.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/flowerPath.iv")) 
+       exit (1);
+    SoSeparator *flowerPath = SoDB::readAll(&myInput);
+    if (flowerPath == NULL) exit (1);
+@@ -99,7 +99,7 @@ main(int , char **argv)
+    root->addChild(flowerGroup);
+ 
+    // Read the flower object from a file and add to the group
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/flower.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/flower.iv")) 
+       exit (1);
+    SoSeparator *flower= SoDB::readAll(&myInput);
+    if (flower == NULL) exit (1);
+diff --git a/apps/examples/Mentor/CXX/13.7.Rotor.c++ b/apps/examples/Mentor/CXX/13.7.Rotor.c++
+index f0b670b..8474490 100644
+--- a/apps/examples/Mentor/CXX/13.7.Rotor.c++
++++ b/apps/examples/Mentor/CXX/13.7.Rotor.c++
+@@ -82,7 +82,7 @@ main(int argc, char **argv)
+ 
+    // Read in the data for the windmill tower
+    SoSeparator *windmillTower = 
+-            readFile("/usr/share/src/Inventor/examples/data/windmillTower.iv");
++            readFile("" IVEXAMPLESDATADIR "/windmillTower.iv");
+    root->addChild(windmillTower);
+ 
+    // Add a rotor node to spin the vanes
+@@ -93,7 +93,7 @@ main(int argc, char **argv)
+ 
+    // Read in the data for the windmill vanes
+    SoSeparator *windmillVanes = 
+-            readFile("/usr/share/src/Inventor/examples/data/windmillVanes.iv");
++            readFile("" IVEXAMPLESDATADIR "/windmillVanes.iv");
+    root->addChild(windmillVanes);
+ 
+    // Create a viewer
+diff --git a/apps/examples/Mentor/CXX/13.8.Blinker.c++ b/apps/examples/Mentor/CXX/13.8.Blinker.c++
+index 73e374a..11433cd 100644
+--- a/apps/examples/Mentor/CXX/13.8.Blinker.c++
++++ b/apps/examples/Mentor/CXX/13.8.Blinker.c++
+@@ -70,7 +70,7 @@ main(int , char **argv)
+ 
+    // Read in the parts of the sign from a file
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/eatAtJosies.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/eatAtJosies.iv")) 
+       exit (1);
+    SoSeparator *fileContents = SoDB::readAll(&myInput);
+    if (fileContents == NULL) 
+diff --git a/apps/examples/Mentor/CXX/14.2.Editors.c++ b/apps/examples/Mentor/CXX/14.2.Editors.c++
+index 8a748ef..3145695 100644
+--- a/apps/examples/Mentor/CXX/14.2.Editors.c++
++++ b/apps/examples/Mentor/CXX/14.2.Editors.c++
+@@ -88,7 +88,7 @@ main(int , char **argv)
+ 
+    // Read an object from file. 
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/desk.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/desk.iv")) 
+       exit (1);
+    SoSeparator *fileContents = SoDB::readAll(&myInput);
+    if (fileContents == NULL) 
+diff --git a/apps/examples/Mentor/CXX/15.3.AttachManip.c++ b/apps/examples/Mentor/CXX/15.3.AttachManip.c++
+index d466c92..2320bd6 100644
+--- a/apps/examples/Mentor/CXX/15.3.AttachManip.c++
++++ b/apps/examples/Mentor/CXX/15.3.AttachManip.c++
+@@ -119,7 +119,7 @@ main(int, char **argv)
+    SoWrapperKit *myWrapperKit = new SoWrapperKit;
+    root->addChild(myWrapperKit);
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/luxo.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/luxo.iv")) 
+       exit (1);
+    SoSeparator *objectFromFile = SoDB::readAll(&myInput);
+    if (objectFromFile == NULL) 
+diff --git a/apps/examples/Mentor/CXX/16.2.Callback.c++ b/apps/examples/Mentor/CXX/16.2.Callback.c++
+index 807fe41..5e7f1f1 100644
+--- a/apps/examples/Mentor/CXX/16.2.Callback.c++
++++ b/apps/examples/Mentor/CXX/16.2.Callback.c++
+@@ -91,7 +91,7 @@ main(int , char **argv)
+ 
+    // Read the geometry from a file and add to the scene
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/dogDish.iv")) 
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/dogDish.iv")) 
+       exit (1);
+    SoSeparator *geomObject = SoDB::readAll(&myInput);
+    if (geomObject == NULL) 
+diff --git a/apps/examples/Mentor/CXX/16.3.AttachEditor.c++ b/apps/examples/Mentor/CXX/16.3.AttachEditor.c++
+index 1230563..4b9c3e1 100644
+--- a/apps/examples/Mentor/CXX/16.3.AttachEditor.c++
++++ b/apps/examples/Mentor/CXX/16.3.AttachEditor.c++
+@@ -80,7 +80,7 @@ main(int , char **argv)
+ 
+    // Read the geometry from a file and add to the scene
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/dogDish.iv"))
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/dogDish.iv"))
+       exit (1);
+    SoSeparator *geomObject = SoDB::readAll(&myInput);
+    if (geomObject == NULL)
+diff --git a/apps/examples/Mentor/CXX/16.4.OneWindow.c++ b/apps/examples/Mentor/CXX/16.4.OneWindow.c++
+index 478158e..ad3054c 100644
+--- a/apps/examples/Mentor/CXX/16.4.OneWindow.c++
++++ b/apps/examples/Mentor/CXX/16.4.OneWindow.c++
+@@ -98,7 +98,7 @@ main(int , char **argv)
+ 
+    // Read the geometry from a file and add to the scene
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/dogDish.iv"))
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/dogDish.iv"))
+       exit (1);
+    SoSeparator *geomObject = SoDB::readAll(&myInput);
+    if (geomObject == NULL)
+diff --git a/apps/examples/Mentor/CXX/16.5.Examiner.c++ b/apps/examples/Mentor/CXX/16.5.Examiner.c++
+index 3657a55..140e1f0 100644
+--- a/apps/examples/Mentor/CXX/16.5.Examiner.c++
++++ b/apps/examples/Mentor/CXX/16.5.Examiner.c++
+@@ -61,7 +61,7 @@ main(int , char **argv)
+    
+    // Read the geometry from a file and add to the scene
+    SoInput myInput;
+-   if (!myInput.openFile("/usr/share/src/Inventor/examples/data/dogDish.iv"))
++   if (!myInput.openFile("" IVEXAMPLESDATADIR "/dogDish.iv"))
+       exit (1);
+    SoSeparator *geomObject = SoDB::readAll(&myInput);
+    if (geomObject == NULL)
+diff --git a/apps/examples/Toolmaker/09.Highlights/overlayTest.c++ b/apps/examples/Toolmaker/09.Highlights/overlayTest.c++
+index d800fc7..77b9b36 100644
+--- a/apps/examples/Toolmaker/09.Highlights/overlayTest.c++
++++ b/apps/examples/Toolmaker/09.Highlights/overlayTest.c++
+@@ -63,7 +63,7 @@ main(int , char *argv[])
+     
+    // Open the data file
+    SoInput in;   
+-   char *datafile = "/usr/share/src/Inventor/examples/data/monitor.iv";
++   char *datafile = "" IVEXAMPLESDATADIR "/monitor.iv";
+    if (! in.openFile(datafile)) {
+       fprintf(stderr, "Cannot open %s for reading.\n", datafile);
+       exit(1);
+diff --git a/apps/examples/Toolmaker/09.Highlights/selectionTest.c++ b/apps/examples/Toolmaker/09.Highlights/selectionTest.c++
+index e0dedc9..042db44 100644
+--- a/apps/examples/Toolmaker/09.Highlights/selectionTest.c++
++++ b/apps/examples/Toolmaker/09.Highlights/selectionTest.c++
+@@ -63,7 +63,7 @@ main(int , char *argv[])
+     
+    // Open the data file
+    SoInput in;   
+-   char *datafile = "/usr/share/src/Inventor/examples/data/monitor.iv";
++   char *datafile = "" IVEXAMPLESDATADIR "/monitor.iv";
+    if (! in.openFile(datafile)) {
+       fprintf(stderr, "Cannot open %s for reading.\n", datafile);
+       exit(1);

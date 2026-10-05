@@ -1,0 +1,66 @@
+libimage: use 32-bit fields for the on-disk SGI image layout
+
+The SGI .rgb header fields (min, max, wastebytes, colormap) and the RLE
+row tables (rowstart, rowsize) are 32-bit on disk, and open.c sizes the
+tables as ysize*zsize*sizeof(int), but IMAGE declared them long. On LP64
+every table access then strides 8 bytes through a 4-byte-per-entry block:
+reading an RLE image overruns the heap (glibc aborts with "double free or
+corruption" in iclose) and decodes rows from the wrong offsets. Every
+SoTexture2 with an .rgb file crashed or drew nothing. Declare them as
+uint32_t/int32_t, matching the copy of the header SoTexture2.c++ already
+uses.
+
+diff --git a/libimage/image.h b/libimage/image.h
+index 77c4cde..0765a1e 100644
+--- a/libimage/image.h
++++ b/libimage/image.h
+@@ -50,6 +50,7 @@ extern "C" {
+  */
+ 
+ #include <stdio.h>
++#include <stdint.h>
+ 
+ #define IMAGIC 	0732
+ 
+@@ -90,11 +91,11 @@ typedef struct {
+     unsigned short 	xsize;
+     unsigned short 	ysize;
+     unsigned short 	zsize;
+-    unsigned long 	min;
+-    unsigned long 	max;
+-    unsigned long	wastebytes;	
++    uint32_t	 	min;		/* 32-bit on disk; long is 64-bit on LP64 */
++    uint32_t	 	max;
++    uint32_t		wastebytes;	
+     char 		name[80];
+-    unsigned long	colormap;
++    uint32_t		colormap;
+ 
+     long 		file;		/* stuff used in core only */
+     unsigned short 	flags;
+@@ -108,8 +109,8 @@ typedef struct {
+     unsigned short	*tmpbuf;
+     unsigned long	offset;
+     unsigned long	rleend;		/* for rle images */
+-    unsigned long	*rowstart;	/* for rle images */
+-    long		*rowsize;	/* for rle images */
++    uint32_t		*rowstart;	/* for rle images: 32-bit entries, */
++    int32_t		*rowsize;	/* as stored on disk */
+ } IMAGE;
+ 
+ IMAGE *icreate();
+diff --git a/libimage/open.c b/libimage/open.c
+index 9e5c992..20f378f 100644
+--- a/libimage/open.c
++++ b/libimage/open.c
+@@ -124,8 +124,8 @@ IMAGE *imgopen(int f, char *file, char *mode,
+ 	    image->flags = _IOREAD;
+ 	if(ISRLE(image->type)) {
+ 	    tablesize = image->ysize*image->zsize*sizeof(int);
+-	    image->rowstart = (unsigned long *)malloc(tablesize);
+-	    image->rowsize = (long *)malloc(tablesize);
++	    image->rowstart = (uint32_t *)malloc(tablesize);
++	    image->rowsize = (int32_t *)malloc(tablesize);
+ 	    if( image->rowstart == 0 || image->rowsize == 0 ) {
+ 		free(image);
+ 		close(f);

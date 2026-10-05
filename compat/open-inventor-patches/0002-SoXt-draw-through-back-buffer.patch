@@ -1,0 +1,29 @@
+SoXt: draw new scenes through the back buffer by default
+
+On an expose or a new scene, SoXtRenderArea drew the first frame straight
+into GL_FRONT and only glFlush'ed it, a workaround for old SGI graphics
+hardware. libx11-compat composites a GLX window when it is swapped, so that
+frame never reached the screen (a black canvas until the next redraw).
+Default enableDrawToFrontBuffer to FALSE so every frame is swapped;
+setDrawToFrontBufferEnable(TRUE) still restores the old behavior.
+
+diff --git a/libSoXt/src/SoXtGLWidget.c++ b/libSoXt/src/SoXtGLWidget.c++
+index ff5dabe..9fc551f 100644
+--- a/libSoXt/src/SoXtGLWidget.c++
++++ b/libSoXt/src/SoXtGLWidget.c++
+@@ -168,8 +168,13 @@ SoXtGLWidget::SoXtGLWidget(
+     glxSize.setValue(0, 0);
+     borderSize = 0;
+     waitForExpose = TRUE;
+-    drawToFrontBuffer = TRUE; // used by RA to draw new scenes to front buffer
+-    enableDrawToFrontBuffer = TRUE;
++    // libx11-compat composites a GLX window when it is swapped, so a frame
++    // drawn straight to the front buffer and only glFlush'ed never reaches the
++    // screen. Draw new scenes through the back buffer and swap (the front
++    // buffer path was a workaround for old SGI graphics hardware);
++    // setDrawToFrontBufferEnable(TRUE) still turns it back on.
++    drawToFrontBuffer = FALSE; // used by RA to draw new scenes to front buffer
++    enableDrawToFrontBuffer = FALSE;
+     
+     //
+     // window attribute list

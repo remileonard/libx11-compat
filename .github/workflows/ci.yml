@@ -84,6 +84,12 @@ env:
   # t1lib, so no image or numeric system libs are pulled in beyond the Motif
   # chain. python3-pil backs the offscreen replay smoke's image assertions.
   GRACE_BUILD_PKGS: "python3-pil"
+  # Open Inventor configures through CMake (bison for its parser), links
+  # libjpeg/freetype from the host, and renders on the direct desktop-GL path:
+  # GLVND libOpenGL + Mesa EGL (surfaceless llvmpipe) under Xvfb. GLU is built
+  # in-tree from mesa/glu, so no libglu1-mesa-dev. fontconfig + a font family
+  # back the font directory scripts/open-inventor-fonts.sh links for SoText3.
+  OPEN_INVENTOR_BUILD_PKGS: "cmake g++ libjpeg-dev libfreetype-dev libopengl-dev libegl-dev libgl1-mesa-dri xvfb python3-pil fontconfig fonts-dejavu-core"
   DIFFERENTIAL_PKGS: "imagemagick openssh-client python3-pil rsync xauth xvfb"
   # Pinned Emscripten SDK, shared by every wasm job. Folded into each wasm cache
   # key so an SDK bump never reuses a sysroot/deps/port cache built by the old
@@ -738,6 +744,76 @@ jobs:
         # both demo and violawww failures.
         if: ${{ !cancelled() }}
         run: ccache --show-stats
+
+  # ---- Open Inventor on the direct desktop-GL path ----
+  #
+  # SGI Open Inventor (libInventor + the Motif SoXt viewers) and its Mentor
+  # examples build against libX11-compat, libXt-compat, libXi-compat and the
+  # in-tree Motif, with gl* through GLVND libOpenGL straight to Mesa (no gl4es)
+  # and an in-tree GLU. check-open-inventor audits that no host X11/Motif/GL
+  # library resolves into the binaries, then renders two Mentor examples
+  # headless and asserts each paints.
+  open-inventor:
+    runs-on: ubuntu-24.04
+    env:
+      MOTIF_YACC: "bison -y"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ${{ env.COMMON_BUILD_PKGS }} ${{ env.MOTIF_BUILD_PKGS }} \
+            ${{ env.OPEN_INVENTOR_BUILD_PKGS }}
+
+      - name: Cache upstream tarballs and extracted source/headers
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/upstream
+            !build/upstream/**/*.o
+            !build/upstream/**/*.d
+            !build/upstream/motif
+            !build/upstream/open-inventor
+            !build/upstream/glu
+          key: upstream-src-v2-${{ runner.os }}-${{ hashFiles('scripts/sync-upstream-headers.py') }}
+          restore-keys: |
+            upstream-src-v2-${{ runner.os }}-
+
+      - name: Cache Motif source clone and autoreconf output
+        uses: actions/cache@v6
+        with:
+          path: build/upstream/motif
+          key: motif-src-${{ runner.os }}-${{ hashFiles('mk/motif.mk', 'compat/motif-patches/**') }}
+
+      - name: Build libX11-compat and Motif
+        run: |
+          make GLX=1 -j"$(nproc)"
+          make GLX=1 motif -j"$(nproc)"
+
+      - name: Build Open Inventor, audit links, render Mentor examples
+        run: |
+          make GLX=1 check-open-inventor || {
+            echo "=== glx-snapshot-run.log ==="; cat /tmp/glx-snapshot-run.log 2>/dev/null || true
+            echo "=== open-inventor build.log (tail) ==="; tail -80 build/open-inventor/build.log 2>/dev/null || true
+            exit 1
+          }
+
+      - name: Build examples/inventor programs
+        run: make GLX=1 open-inventor-examples
+
+      - name: Upload Open Inventor renders on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: open-inventor
+          path: |
+            build/open-inventor-*.png
+            build/open-inventor/build.log
+          if-no-files-found: warn
+          retention-days: 7
 
   # ---- Osiris (Qt 2.3.2 fork) integration and validation ----
   #
