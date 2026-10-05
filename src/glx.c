@@ -537,6 +537,27 @@ static EGLint chooseEglConfigs(EGLint *attribs,
     return numConfigs;
 }
 
+/* True if a glXChooseVisual list asks for a non-main frame-buffer level
+ * (GLX_LEVEL > 0 overlay, < 0 underlay). There are no overlay planes behind
+ * EGL, so such a request must fail like it does on a server without overlay
+ * visuals; toolkits (e.g. Open Inventor's SoXt) then skip the overlay window
+ * instead of compositing an opaque one over the main scene.
+ */
+static Bool visualRequestsOverlayLevel(const int *attribList)
+{
+    const int *p = attribList;
+    for (int i = 0; p && i < MAX_ATTRIB_TOKENS && *p != None; i++) {
+        if (!visualAttribHasValue(*p)) {
+            p++;
+            continue;
+        }
+        if (*p == GLX_LEVEL && p[1] != 0)
+            return True;
+        p += 2;
+    }
+    return False;
+}
+
 XVisualInfo *glXChooseVisual(Display *dpy, int screen, int *attribList)
 {
     /* Only confirm a provider is loaded (cheap, no eglInitialize); the config
@@ -546,7 +567,7 @@ XVisualInfo *glXChooseVisual(Display *dpy, int screen, int *attribList)
      * deferred glXCreateContext can pick a matching config later
      * (realizeLazyContext).
      */
-    if (!eglLoad())
+    if (!eglLoad() || visualRequestsOverlayLevel(attribList))
         return NULL;
     /* Reuse an existing slot for an identical request so repeated
      * glXChooseVisual calls do not exhaust the fixed, never-reclaimed table.
