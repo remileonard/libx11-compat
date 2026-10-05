@@ -5,3 +5,5 @@ out-test/
 *.so
 __pycache__/
 externals/violawww/
+# Download caches (fetch-gl-headers.sh, fetch-angle.sh, fetch-stb-dxt.sh)
+third_party/
