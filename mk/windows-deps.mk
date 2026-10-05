@@ -116,4 +116,28 @@ windows-deps: $(WIN_DEPS_STAMP)
 # Every first-party object needs SDL3/pixman headers from the sysroot.
 $(OBJS): | $(WIN_DEPS_STAMP)
 
+# Distribution: the examples with every DLL they load (libX11-compat, SDL3,
+# SDL3_ttf, and the MinGW runtime), ready to unzip and run on Windows.
+WIN_DIST_DIR := $(OUT)/dist/libx11-compat-win64
+WIN_DIST_ZIP := $(OUT)/dist/libx11-compat-win64.zip
+WIN_RUNTIME_DLLS := libwinpthread-1.dll libgcc_s_seh-1.dll
+
+.PHONY: windows-dist
+## Stage the Windows examples + DLLs and zip them (WINDOWS=1)
+windows-dist: $(WIN_DIST_ZIP)
+
+$(WIN_DIST_ZIP): $(TARGET) $(EXAMPLE_BINS) $(X11PERF_BIN) $(WIN_DEPS_STAMP) \
+    scripts/windows-dist-readme.txt
+	@echo "  DIST    $@"
+	$(Q)rm -rf $(WIN_DIST_DIR) && mkdir -p $(WIN_DIST_DIR)
+	$(Q)cp $(TARGET) $(EXAMPLE_BINS) $(X11PERF_BIN) \
+	    $(WIN_SYSROOT)/bin/SDL3.dll $(WIN_SYSROOT)/bin/SDL3_ttf.dll $(WIN_DIST_DIR)/
+	$(Q)for dll in $(WIN_RUNTIME_DLLS); do \
+	    path=$$($(CC) -print-file-name=$$dll); \
+	    [ -f "$$path" ] || { echo "  FAIL    $$dll not found by $(CC)" >&2; exit 1; }; \
+	    cp "$$path" $(WIN_DIST_DIR)/; \
+	done
+	$(Q)cp scripts/windows-dist-readme.txt $(WIN_DIST_DIR)/README.txt
+	$(Q)rm -f $@ && cd $(dir $@) && zip -qr $(notdir $@) $(notdir $(WIN_DIST_DIR))
+
 endif
