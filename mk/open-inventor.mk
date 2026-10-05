@@ -141,7 +141,7 @@ open-inventor-fetch: $(OI_SRC_STAMP) $(GLU_SRC_STAMP)
 # GLU, compiled straight from the source list in its meson.build (no meson
 # needed) and linked against libOpenGL only, so it brings no libGL/libGLX.
 $(OI_GLU_LIB): $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h $(GL_HDR_CACHE)/GL/glext.h \
-    $(OI_OPENGL_DEP)
+    include/KHR/khrplatform.h $(OI_OPENGL_DEP)
 	@echo "  CC      glu"
 	$(Q)rm -rf $(OI_GLU_DIR)
 	$(Q)mkdir -p $(OI_GLU_DIR)/obj
@@ -154,7 +154,8 @@ $(OI_GLU_LIB): $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h $(GL_HDR_CACHE)/GL/glext
 	        -I$(GLU_SRC_DIR)/src/libnurbs/internals \
 	        -I$(GLU_SRC_DIR)/src/libnurbs/interface \
 	        -I$(GLU_SRC_DIR)/src/libnurbs/nurbtess \
-	        -I$(GL_HDR_CACHE) -c $(GLU_SRC_DIR)/src/$$src -o $$obj; \
+	        -I$(GL_HDR_CACHE) -I$(abspath include) \
+	        -c $(GLU_SRC_DIR)/src/$$src -o $$obj; \
 	    objs="$$objs $$obj"; \
 	done; \
 	$(OI_CXX) $(OI_GLU_LINK) -o $(OI_GLU_DIR)/$(OI_GLU_REAL) $$objs \
@@ -164,13 +165,15 @@ $(OI_GLU_LIB): $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h $(GL_HDR_CACHE)/GL/glext
 # One include root holding X11/, Xm/ and GL/ so the CMake cache can point every
 # X/GL include dir at it: the staged upstream X11 headers overlaid with the
 # in-tree ones, the in-tree Motif headers, and the GL headers of the direct path
-# (pristine gl.h/glext.h, our glx.h, GLU's glu.h).
+# (pristine gl.h/glext.h, our glx.h, GLU's glu.h, and the in-tree
+# KHR/khrplatform.h glext.h includes: macOS has no system copy).
 $(OI_SYSROOT_STAMP): mk/open-inventor.mk $(UPSTREAM_HEADERS_STAMP) \
     $(MOTIF_STAGE_STAMP) $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h \
-    $(GL_HDR_CACHE)/GL/glext.h
+    $(GL_HDR_CACHE)/GL/glext.h include/KHR/khrplatform.h
 	@echo "  SYSROOT open-inventor"
 	$(Q)rm -rf $(OI_SYSROOT)
 	$(Q)mkdir -p $(OI_SYSROOT)/X11/extensions $(OI_SYSROOT)/Xm $(OI_SYSROOT)/GL
+	$(Q)ln -sf $(abspath include)/KHR $(OI_SYSROOT)/KHR
 	$(Q)for e in $(abspath $(OUT)/upstream/include)/X11/*; do \
 	    b=$$(basename "$$e"); \
 	    [ "$$b" = extensions ] && continue; \
