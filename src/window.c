@@ -348,6 +348,32 @@ static Bool hasUnmappedAncestor(Window window)
  * promoted keeps 1x core fonts too, or the font scale and the present upscale
  * compound and the text comes out twice too large.
  */
+#if defined(_WIN32) && defined(LIBX11_COMPAT_SDL3)
+/* X places a top-level's client area at its x/y, and on X11 the window
+ * manager puts its frame around that and keeps the title bar reachable.
+ * Windows has no such manager: a client at (0, 0) leaves the title bar above
+ * the screen, where the window can no longer be dragged. Shift a decorated
+ * window down/right until its frame is inside the display's usable area.
+ * The move comes back as an SDL MOVED event, which updates the X position and
+ * sends the client a ConfigureNotify (src/events.c).
+ */
+static void keepTitleBarOnScreen(SDL_Window *sdlWindow)
+{
+    int top = 0, left = 0, bottom = 0, right = 0;
+    SDL_Rect usable;
+    if (!SDL_GetWindowBordersSize(sdlWindow, &top, &left, &bottom, &right) ||
+        !SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(sdlWindow),
+                                    &usable))
+        return;
+    int x = 0, y = 0;
+    SDL_GetWindowPosition(sdlWindow, &x, &y);
+    int newX = x - left < usable.x ? usable.x + left : x;
+    int newY = y - top < usable.y ? usable.y + top : y;
+    if (newX != x || newY != y)
+        SDL_SetWindowPosition(sdlWindow, newX, newY);
+}
+#endif
+
 static Bool realizeTopLevelWindow(Display *display, Window window)
 {
     /* SDL_CreateWindow and the renderer setup below are main-thread-only on
@@ -487,6 +513,11 @@ static Bool realizeTopLevelWindow(Display *display, Window window)
         handleError(0, display, None, 0, BadMatch, 0);
         return False;
     }
+
+#if defined(_WIN32) && defined(LIBX11_COMPAT_SDL3)
+    if (!windowStruct->overrideRedirect && !(flags & SDL_WINDOW_BORDERLESS))
+        keepTitleBarOnScreen(sdlWindow);
+#endif
 
     registerWindowMapping(window, SDL_GetWindowID(sdlWindow));
     windowStruct->sdlWindow = sdlWindow;
