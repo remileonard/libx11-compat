@@ -32,22 +32,39 @@ void *dlopen(const char *file, int mode)
     return (void *) module;
 }
 
-void *dlsym(void *handle, const char *name)
+/* Global scope: the executable first, then every loaded module, leaving out
+ * `skip` (the caller's own module for RTLD_NEXT). */
+static FARPROC searchModules(const char *name, HMODULE skip)
+{
+    HMODULE modules[1024];
+    DWORD needed = 0;
+    HMODULE exe = GetModuleHandleA(NULL);
+    FARPROC proc = exe != skip ? GetProcAddress(exe, name) : NULL;
+    if (!proc && EnumProcessModules(GetCurrentProcess(), modules,
+                                    sizeof(modules), &needed)) {
+        DWORD count = needed / sizeof(HMODULE);
+        if (count > sizeof(modules) / sizeof(modules[0]))
+            count = sizeof(modules) / sizeof(modules[0]);
+        for (DWORD i = 0; i < count && !proc; i++)
+            if (modules[i] != skip)
+                proc = GetProcAddress(modules[i], name);
+    }
+    return proc;
+}
+
+/* noinline: the return address must be dlsym's caller, not a frame it was
+ * inlined into. */
+__attribute__((noinline)) void *dlsym(void *handle, const char *name)
 {
     FARPROC proc = NULL;
     if (handle == RTLD_DEFAULT) {
-        /* Global scope: the executable first, then every loaded module. */
-        HMODULE modules[1024];
-        DWORD needed = 0;
-        proc = GetProcAddress(GetModuleHandleA(NULL), name);
-        if (!proc && EnumProcessModules(GetCurrentProcess(), modules,
-                                        sizeof(modules), &needed)) {
-            DWORD count = needed / sizeof(HMODULE);
-            if (count > sizeof(modules) / sizeof(modules[0]))
-                count = sizeof(modules) / sizeof(modules[0]);
-            for (DWORD i = 0; i < count && !proc; i++)
-                proc = GetProcAddress(modules[i], name);
-        }
+        proc = searchModules(name, NULL);
+    } else if (handle == RTLD_NEXT) {
+        HMODULE caller = NULL;
+        GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           (LPCSTR) __builtin_return_address(0), &caller);
+        proc = searchModules(name, caller);
     } else {
         proc = GetProcAddress((HMODULE) handle, name);
     }
@@ -61,7 +78,8 @@ void *dlsym(void *handle, const char *name)
 
 int dlclose(void *handle)
 {
-    if (handle == RTLD_DEFAULT || handle == GetModuleHandleA(NULL))
+    if (handle == RTLD_DEFAULT || handle == RTLD_NEXT ||
+        handle == GetModuleHandleA(NULL))
         return 0;
     if (FreeLibrary((HMODULE) handle))
         return 0;

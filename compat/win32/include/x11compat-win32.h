@@ -20,6 +20,32 @@ extern "C" {
 /* struct timeval's tv_usec type in POSIX; MinGW's timeval uses long. */
 typedef long suseconds_t;
 
+/* No Unix identities on Windows: everyone is one ordinary, non-root user
+ * (non-zero, so code that refuses to trust the environment as root does
+ * not take that path). <pwd.h> builds that user from the environment. */
+typedef int uid_t;
+typedef int gid_t;
+static inline uid_t getuid(void)
+{
+    return 1000;
+}
+static inline uid_t geteuid(void)
+{
+    return 1000;
+}
+static inline gid_t getgid(void)
+{
+    return 1000;
+}
+static inline gid_t getegid(void)
+{
+    return 1000;
+}
+
+/* ws2_32's, declared exactly as <winsock2.h> does (that header collides
+ * with the X headers); WSAStartup has run once a display is open. */
+__declspec(dllimport) int __stdcall gethostname(char *name, int namelen);
+
 int setenv(const char *name, const char *value, int overwrite);
 int unsetenv(const char *name);
 /* POSIX rename() semantics (replace an existing target); see src/util.h. */

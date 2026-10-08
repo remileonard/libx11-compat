@@ -113,6 +113,14 @@ $(WIN_DEPS_STAMP): $(WIN_SDL3_TTF_STAMP) $(WIN_PIXMAN_STAMP)
 ## Cross-build the Windows dependencies (SDL3, SDL3_ttf, pixman; WINDOWS=1)
 windows-deps: $(WIN_DEPS_STAMP)
 
+# The POSIX shims (poll, dlfcn, iconv, regex, sigaction, ...) as a static archive for the
+# toolkit DLLs; the core links the same objects directly.
+WIN_POSIX_OBJS := $(addprefix $(OUT)/compat/win32/,dlfcn.o iconv.o poll.o \
+    posix.o regex.o signal.o)
+$(WIN_POSIX_LIB): $(WIN_POSIX_OBJS)
+	@echo "  AR      $@"
+	$(Q)rm -f $@ && $(AR) rcs $@ $^
+
 # Every first-party object needs SDL3/pixman headers from the sysroot.
 $(OBJS): | $(WIN_DEPS_STAMP)
 

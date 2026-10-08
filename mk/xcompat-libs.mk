@@ -81,9 +81,10 @@ $(OUT)/xft-compat.o: src/xft.c $(UPSTREAM_HEADERS_STAMP) \
     $(SDL_BACKEND_STAMP) | $(OUT)
 	$(cc_object)
 
-$(XEXT_COMPAT_TARGET): $(OUT)/xext-compat.o $(TARGET) | $(OUT)
+$(XEXT_COMPAT_TARGET): $(OUT)/xext-compat.o $(TARGET) $(WIN_POSIX_LIB) | $(OUT)
 	@echo "  LD      $@"
-	$(Q)$(CC) $(LDFLAGS) $(XEXT_COMPAT_LDFLAGS) -shared -o $@ $< -L$(OUT) -lX11-compat
+	$(Q)$(CC) $(LDFLAGS) $(XEXT_COMPAT_LDFLAGS) -shared -o $@ $< -L$(OUT) -lX11-compat \
+	    $(WIN_POSIX_LDLIBS)
 
 ifeq ($(WASM),1)
 $(XMU_COMPAT_TARGET): $(XMU_COMPAT_OBJ) $(XMU_UPSTREAM_OBJS) | $(OUT)
@@ -92,11 +93,11 @@ $(XMU_COMPAT_TARGET): $(XMU_COMPAT_OBJ) $(XMU_UPSTREAM_OBJS) | $(OUT)
 	$(Q)$(AR) rcs $@ $(XMU_COMPAT_OBJ) $(XMU_UPSTREAM_OBJS)
 else
 $(XMU_COMPAT_TARGET): $(XMU_COMPAT_OBJ) $(XMU_UPSTREAM_OBJS) $(TARGET) \
-    $(LIBXT_TARGET) | $(OUT)
+    $(LIBXT_TARGET) $(WIN_POSIX_LIB) | $(OUT)
 	@echo "  LD      $@"
 	$(Q)$(CC) $(LDFLAGS) $(XMU_COMPAT_LDFLAGS) -shared -o $@ \
 	    $(XMU_COMPAT_OBJ) $(XMU_UPSTREAM_OBJS) \
-	    -L$(OUT) -lXt-compat -lX11-compat
+	    -L$(OUT) -lXt-compat -lX11-compat $(WIN_POSIX_LDLIBS)
 endif
 
 $(XINERAMA_COMPAT_TARGET): $(OUT)/xinerama-compat.o $(TARGET) | $(OUT)

@@ -44,4 +44,12 @@ EXE := .exe
 # paths, so no parse-time pkg-config against a not-yet-built .pc is needed.
 WIN_SYSROOT := $(abspath $(OUT))/win-sysroot
 
+# The toolkit libraries (libXt, Xmu, Motif, ...) compile upstream sources with
+# their own flag sets; they need the same POSIX shim headers as the core, and
+# link the shim objects from a static archive (mk/windows-deps.mk) rather than
+# reaching into libX11-compat.dll, whose exports stay the Xlib API.
+WIN_COMPAT_CPPFLAGS := -I$(abspath compat/win32/include) -include x11compat-win32.h
+WIN_POSIX_LIB := $(OUT)/libwin32-posix.a
+WIN_POSIX_LDLIBS := $(WIN_POSIX_LIB) -lws2_32 -lpsapi
+
 endif

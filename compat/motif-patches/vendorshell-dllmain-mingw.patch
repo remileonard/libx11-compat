@@ -1,0 +1,31 @@
+VendorS: re-parent the Xt shells onto Motif's VendorShell on MinGW too.
+
+On ELF and Mach-O, libXm's vendorShellClassRec interposes libXt's, so
+TopLevelShell and TransientShell inherit Motif's VendorShell. PE DLLs
+do not interpose: the Xt shells keep libXt's plain VendorShell, which
+rejects Motif's non-widget children ("attempt to add non-widget child
+dsm"). Motif already fixes that up from DllMain for Cygwin; enable the
+same for native Windows (_WIN32) builds.
+
+diff --git a/lib/Xm/VendorS.c b/lib/Xm/VendorS.c
+index 41d57ee4..3dbf46d2 100644
+--- a/lib/Xm/VendorS.c
++++ b/lib/Xm/VendorS.c
+@@ -48,7 +48,7 @@ static char rcsid[] = "$TOG: VendorS.c /main/21 1999/08/09 10:49:41 mgreess $"
+ #include <Xm/VendorSEP.h>
+ #include <Xm/VendorSP.h>
+ #include <Xm/ToolTipCT.h>
+-#if defined(__APPLE__) || defined(__CYGWIN__)
++#if defined(__APPLE__) || defined(__CYGWIN__) || defined(_WIN32)
+ #include <Xm/GrabShell.h>
+ #include <Xm/DragOverS.h>
+ #endif
+@@ -536,7 +536,7 @@ __attribute__((weak))
+ externaldef(vendorshellwidgetclass) WidgetClass
+   vendorShellWidgetClass = (WidgetClass) (&vendorShellClassRec);
+ 
+-#ifdef __CYGWIN__
++#if defined(__CYGWIN__) || defined(_WIN32)
+ int __stdcall DllMain(unsigned long handle, unsigned long flag, void *proc)
+ {
+ 	(void)handle;

@@ -33,9 +33,18 @@ comma := ,
 # install_name to @rpath/<name> lets consumers re-target the search via
 # -Wl,-rpath,<dir>; loader_path means "search next to the dylib that
 # DT_NEEDED'd me" which is what we want for the in-tree compat stack.
+#
+# Windows: no rpath (DLLs load from the executable's directory), but each DLL
+# gets an import library, $(OUT)/<name>.a, which -l<lib> prefers over the DLL
+# itself. Linking the DLL directly treats every export as code; the import
+# library keeps ld's DATA marking, so a client's static initializers that take
+# an exported variable's address (libXt's _XtInherit trampoline, the widget
+# class records) are auto-imported to the real address instead of a local
+# thunk.
 define shared_lib_rpath_ldflags
 $(if $(filter Linux,$(UNAME_S)),-Wl$(comma)-rpath$(comma)'$$ORIGIN') \
-$(if $(filter Darwin,$(UNAME_S)),-Wl$(comma)-install_name$(comma)@rpath/$(1) -Wl$(comma)-rpath$(comma)@loader_path)
+$(if $(filter Darwin,$(UNAME_S)),-Wl$(comma)-install_name$(comma)@rpath/$(1) -Wl$(comma)-rpath$(comma)@loader_path) \
+$(if $(filter Windows,$(UNAME_S)),-Wl$(comma)--out-implib$(comma)$(OUT)/$(1).a)
 endef
 
 # Header-dependency generation flags, shared by every compile rule in the tree.

@@ -58,6 +58,7 @@ include mk/tests.mk
 include mk/examples.mk
 include mk/wasm-deps.mk
 include mk/windows-deps.mk
+include mk/windows-motif.mk
 include mk/wasm-motif.mk
 include mk/wasm-apps.mk
 include mk/wasm-mosaic.mk

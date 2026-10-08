@@ -103,7 +103,7 @@ LIBXT_CPPFLAGS := \
     -iquote include/X11 \
     -iquote $(OUT)/upstream/include/X11 \
     $(if $(SDL2_PREFIX),-I$(SDL2_PREFIX)/include) \
-    -D_GNU_SOURCE -D_DARWIN_C_SOURCE
+    -D_GNU_SOURCE -D_DARWIN_C_SOURCE $(WIN_COMPAT_CPPFLAGS)
 
 # Upstream libXt was written before -Wall / strict-prototypes were common,
 # so silence the noise specific to that tree without weakening our own
@@ -221,10 +221,10 @@ $(LIBXT_TARGET): $(LIBXT_OBJS) | $(OUT)
 	$(Q)rm -f $@
 	$(Q)$(AR) rcs $@ $(LIBXT_OBJS)
 else
-$(LIBXT_TARGET): $(LIBXT_OBJS) $(TARGET) | $(OUT)
+$(LIBXT_TARGET): $(LIBXT_OBJS) $(TARGET) $(WIN_POSIX_LIB) | $(OUT)
 	@echo "  LD      $@"
 	$(Q)$(CC) $(LDFLAGS) $(LIBXT_LDFLAGS) -shared -o $@ $(LIBXT_OBJS) \
-	    -L$(OUT) -lX11-compat -lm -pthread
+	    -L$(OUT) -lX11-compat $(WIN_POSIX_LDLIBS) -lm -pthread
 endif
 
 .PHONY: libxt
