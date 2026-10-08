@@ -24,10 +24,21 @@
 extern "C" {
 #endif
 
+/* dladdr: the module holding an address (dli_fname, dli_fbase); the
+ * symbol fields are always NULL, as PE keeps no symbol table at run time.
+ */
+typedef struct {
+    const char *dli_fname;
+    void *dli_fbase;
+    const char *dli_sname;
+    void *dli_saddr;
+} Dl_info;
+
 void *dlopen(const char *file, int mode);
 void *dlsym(void *handle, const char *name);
 int dlclose(void *handle);
 char *dlerror(void);
+int dladdr(const void *addr, Dl_info *info);
 
 #ifdef __cplusplus
 }

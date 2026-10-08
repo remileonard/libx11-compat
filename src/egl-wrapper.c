@@ -8,6 +8,9 @@
  *      dladdr so it works regardless of the install prefix.
  *   3. system SONAME            -- where Linux picks up Mesa.
  *
+ * Windows has no libEGL: there the table is filled by the WGL emulation in
+ * src/egl-wgl.c instead (search order above does not apply).
+ *
  * When nothing loads, the whole GLX path degrades to "extension absent": every
  * glX* entry point returns a safe NULL/False and XQueryExtension keeps
  * reporting GLX unsupported. That is the correct fallback, not a failure.
@@ -31,7 +34,9 @@ static bool ready = false;
 static pthread_once_t loadOnce = PTHREAD_ONCE_INIT;
 static pthread_once_t readyOnce = PTHREAD_ONCE_INIT;
 
-#if defined(__APPLE__)
+#if defined(_WIN32)
+/* No libEGL to search for; see loadImpl. */
+#elif defined(__APPLE__)
 #define EGL_PLATFORM_SUBDIR "macOS"
 #define EGL_SONAME "libEGL.dylib"
 static const char *const kSystemSonames[] = {"libEGL.dylib", NULL};
@@ -41,6 +46,7 @@ static const char *const kSystemSonames[] = {"libEGL.dylib", NULL};
 static const char *const kSystemSonames[] = {"libEGL.so.1", "libEGL.so", NULL};
 #endif
 
+#ifndef _WIN32
 /* Build "<dir of this module>/plugins/<platform>/libEGL" if we can locate our
  * own path; returns a malloc'd string or NULL. Caller frees.
  */
@@ -103,6 +109,7 @@ static void *resolve(void *handle, const char *name, bool *ok)
     }
     return sym;
 }
+#endif /* !_WIN32 */
 
 /* Decide whether the provider offers desktop GL or is GLES-only. eglBindAPI is
  * the cheap signal; ANGLE rejects EGL_OPENGL_API, Mesa accepts it. A stricter
@@ -121,6 +128,18 @@ static EglClientApi probeClientApi(void)
     return EGL_CLIENT_API_GLES;
 }
 
+#ifdef _WIN32
+static void loadImpl(void)
+{
+    if (!eglWglLoad(&api)) {
+        LOG("EGL: opengl32.dll / WGL unavailable; GLX reported absent\n");
+        memset(&api, 0, sizeof(api));
+        return;
+    }
+    available = true;
+    LOG("EGL: WGL provider loaded (init deferred)\n");
+}
+#else
 static void loadImpl(void)
 {
     void *handle = dlopenEgl();
@@ -167,6 +186,7 @@ static void loadImpl(void)
     available = true;
     LOG("EGL: provider loaded (init deferred)\n");
 }
+#endif /* _WIN32 */
 
 /* The expensive half: initialize the default display and probe desktop-vs-GLES.
  * Deferred so it lands on the first glXMakeCurrent, after the client's window

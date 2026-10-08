@@ -1,9 +1,13 @@
 SRCS := $(wildcard src/*.c) $(wildcard src/path/*.c)
 
 # GLX (src/glx.c + src/egl-wrapper.c) is optional; drop it when GLX=0. See the
-# GLX toggle note in mk/config.mk.
+# GLX toggle note in mk/config.mk. src/egl-wgl.c is the Windows provider behind
+# the EGL wrapper (WGL), so it builds only for WINDOWS=1 GLX=1.
 ifneq ($(GLX),1)
 SRCS := $(filter-out src/glx.c src/egl-wrapper.c,$(SRCS))
+endif
+ifneq ($(WINDOWS)/$(GLX),1/1)
+SRCS := $(filter-out src/egl-wgl.c,$(SRCS))
 endif
 
 # Upstream libX11 translation units staged by mk/upstream-headers.mk via

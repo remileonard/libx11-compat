@@ -94,3 +94,21 @@ char *dlerror(void)
     haveError = 0;
     return lastError;
 }
+
+int dladdr(const void *addr, Dl_info *info)
+{
+    /* One path per thread, as glibc keeps dli_fname valid while the module
+     * stays loaded; callers use it right away. */
+    static __thread char path[MAX_PATH];
+    HMODULE module = NULL;
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCSTR) addr, &module) ||
+        !GetModuleFileNameA(module, path, sizeof(path)))
+        return 0;
+    info->dli_fname = path;
+    info->dli_fbase = (void *) module;
+    info->dli_sname = NULL;
+    info->dli_saddr = NULL;
+    return 1;
+}

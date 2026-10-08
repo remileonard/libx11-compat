@@ -118,7 +118,7 @@ LDLIBS += $(SDL_COMPAT_LIBS) $(PIXMAN_LIBS) -lm
 ifneq ($(WASM),1)
 LDLIBS += -pthread \
           $(if $(filter Linux,$(UNAME_S)),-ldl) \
-          $(if $(filter Windows,$(UNAME_S)),-lws2_32 -lpsapi) \
+          $(if $(filter Windows,$(UNAME_S)),-lws2_32 -lpsapi -lgdi32 -luser32) \
           $(if $(filter Darwin,$(UNAME_S)),-framework CoreFoundation) \
           $(if $(filter Darwin,$(UNAME_S)),-lobjc)
 endif
