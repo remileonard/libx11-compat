@@ -1,5 +1,6 @@
 /* POSIX libc calls MinGW-w64 lacks; see compat/win32/include/x11compat-win32.h.
  */
+#include <direct.h>
 #include <errno.h>
 #include <pwd.h>
 #include <stdio.h>
@@ -143,4 +144,9 @@ void bcopy(const void *src, void *dst, size_t n)
 void bzero(void *s, size_t n)
 {
     memset(s, 0, n);
+}
+
+int x11compatMkdir(const char *path)
+{
+    return _mkdir(path);
 }

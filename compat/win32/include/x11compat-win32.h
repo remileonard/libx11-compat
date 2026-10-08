@@ -17,9 +17,21 @@
 extern "C" {
 #endif
 
+/* MinGW's <stdlib.h> does `#define environ _environ`, which rewrites every
+ * identifier named environ (Open Inventor has a local `SoEnvironment
+ * *environ`). Include it first and drop the macro; its include guard keeps
+ * any later <stdlib.h> or <cstdlib> from defining it again. POSIX code
+ * declares the environ variable itself, and none of this tree does. */
+#include <stdlib.h>
+#ifdef environ
+#undef environ
+#endif
+
 /* u_char, u_short, u_int, u_long: glibc's <sys/types.h> has them; MinGW keeps
  * them in a header of their own (shared with <winsock2.h>). */
 #include <_bsd_types.h>
+/* and the BSD "core address" type. */
+typedef char *caddr_t;
 
 /* struct timeval's tv_usec type in POSIX; MinGW's timeval uses long. */
 typedef long suseconds_t;
@@ -52,6 +64,12 @@ __declspec(dllimport) int __stdcall gethostname(char *name, int namelen);
 
 int setenv(const char *name, const char *value, int overwrite);
 int unsetenv(const char *name);
+/* POSIX mkdir(path, mode); MinGW's <io.h> has mkdir(path). Both forms map
+ * to x11compatMkdir, which ignores the mode (Windows has no permission
+ * bits). Defined before <io.h>, so its own prototype is renamed too. */
+#define mkdir(path, ...) x11compatMkdir(path)
+int x11compatMkdir(const char *path);
+
 /* The POSIX 48-bit linear congruential generator (<stdlib.h>). */
 double drand48(void);
 long lrand48(void);

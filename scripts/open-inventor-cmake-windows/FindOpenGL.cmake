@@ -2,7 +2,9 @@
 # system opengl32 (WGL's compatibility contexts), GLU from glu32, and glX*
 # from libx11-compat, which runs GLX on WGL (src/egl-wgl.c). OpenGL::GL
 # carries libx11-compat so every target that calls glX* links it, as the
-# GLVND OpenGL::GLX target does on Linux.
+# GLVND OpenGL::GLX target does on Linux. OpenGL::GLU also carries the POSIX
+# shim archive (LIBX11_COMPAT_ICONV), whose x11compatGluCallback adapts cdecl
+# GLU callbacks on 32-bit Windows (compat/win32/include/GL/glu.h).
 
 set(OPENGL_FOUND TRUE)
 set(OpenGL_FOUND TRUE)
@@ -19,5 +21,5 @@ if(NOT TARGET OpenGL::GLU)
     add_library(OpenGL::GLU UNKNOWN IMPORTED)
     set_target_properties(OpenGL::GLU PROPERTIES
         IMPORTED_LOCATION "${OPENGL_glu_LIBRARY}"
-        INTERFACE_LINK_LIBRARIES OpenGL::GL)
+        INTERFACE_LINK_LIBRARIES "OpenGL::GL;${LIBX11_COMPAT_ICONV}")
 endif()

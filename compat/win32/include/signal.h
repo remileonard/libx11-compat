@@ -20,6 +20,34 @@
 #define SIGBUS 10
 #endif
 
+/* POSIX signals Windows never raises, numbered as on the BSDs, so code that
+ * installs handlers for them compiles; signal()/sigaction() report them as
+ * unsupported (SIG_ERR / -1). */
+#ifndef SIGHUP
+#define SIGHUP 1
+#endif
+#ifndef SIGQUIT
+#define SIGQUIT 3
+#endif
+#ifndef SIGKILL
+#define SIGKILL 9
+#endif
+#ifndef SIGPIPE
+#define SIGPIPE 13
+#endif
+#ifndef SIGALRM
+#define SIGALRM 14
+#endif
+#ifndef SIGCHLD
+#define SIGCHLD 20
+#endif
+#ifndef SIGUSR1
+#define SIGUSR1 30
+#endif
+#ifndef SIGUSR2
+#define SIGUSR2 31
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
