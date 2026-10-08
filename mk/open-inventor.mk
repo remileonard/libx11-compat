@@ -397,6 +397,7 @@ ifeq ($(OI_PLATFORM),windows)
 # programs sit next to the DLLs and the relative paths compiled in (data,
 # ./share/inventor/...) resolve from the folder. chesschairs.iv, which the
 # install would convert to binary with the host's ivcat, ships as ASCII.
+# Debug information is stripped from the shipped binaries.
 OI_DIST_NAME := open-inventor-$(notdir $(OUT))
 OI_DIST_DIR := $(OUT)/dist/$(OI_DIST_NAME)
 OI_DIST_ZIP := $(OUT)/dist/$(OI_DIST_NAME).zip
@@ -442,6 +443,7 @@ $(OI_DIST_ZIP): $(OI_BUILD_STAMP) $(OI_FONT_STAMP) \
 	        cp /usr/share/doc/$$pkg/copyright \
 	            $(OI_DIST_DIR)/share/inventor/fonts/LICENSE-$$pkg.txt; \
 	done
+	$(Q)$(MINGW_TRIPLE)-strip --strip-debug $(OI_DIST_DIR)/*.exe $(OI_DIST_DIR)/*.dll
 	$(Q)cp scripts/windows-open-inventor-readme.txt $(OI_DIST_DIR)/README.txt
 	$(Q)rm -f $@ && cd $(dir $@) && zip -qr $(notdir $@) $(OI_DIST_NAME)
 
