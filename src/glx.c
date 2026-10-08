@@ -1580,14 +1580,25 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
  * process-resolved once; its GL enum arguments are spelled out at the call to
  * avoid pulling in a GL header.
  */
-typedef void (*GlReadPixelsFn)(int x,
-                               int y,
-                               int width,
-                               int height,
-                               unsigned int format,
-                               unsigned int type,
-                               void *pixels);
-typedef void (*GlPixelStoreiFn)(unsigned int pname, int param);
+/* The GL entry points' calling convention: __stdcall on 32-bit Windows
+ * (opengl32.dll), where calling one through a plain pointer would unbalance
+ * the stack; the platform default everywhere else.
+ */
+#if defined(_WIN32) && defined(__i386__)
+#define GLX_GLAPIENTRY __stdcall
+#else
+#define GLX_GLAPIENTRY
+#endif
+
+typedef void(GLX_GLAPIENTRY *GlReadPixelsFn)(int x,
+                                             int y,
+                                             int width,
+                                             int height,
+                                             unsigned int format,
+                                             unsigned int type,
+                                             void *pixels);
+typedef void(GLX_GLAPIENTRY *GlPixelStoreiFn)(unsigned int pname, int param);
+typedef void(GLX_GLAPIENTRY *GlFlushFn)(void);
 
 /* Readback entry points, resolved once. A concurrent first swap on two windows
  * would race a plain "static Bool resolved" flag (a second thread can observe
@@ -1596,7 +1607,7 @@ typedef void (*GlPixelStoreiFn)(unsigned int pname, int param);
  */
 static GlReadPixelsFn compositeReadPixels = NULL;
 static GlPixelStoreiFn compositePixelStorei = NULL;
-static void (*compositeFlush)(void) = NULL;
+static GlFlushFn compositeFlush = NULL;
 static pthread_once_t compositeResolveOnce = PTHREAD_ONCE_INIT;
 
 static void *resolveGl4esSymbol(void *initSymbol, const char *name)
@@ -1683,9 +1694,9 @@ static void resolveCompositeReadback(void)
      */
     if (haveGl4es)
         compositeFlush =
-            (void (*)(void)) resolveGl4esSymbol(gl4esInitSymbol, "glFlush");
+            (GlFlushFn) resolveGl4esSymbol(gl4esInitSymbol, "glFlush");
     if (!compositeFlush)
-        compositeFlush = (void (*)(void)) eglApi()->getProcAddress("glFlush");
+        compositeFlush = (GlFlushFn) eglApi()->getProcAddress("glFlush");
 }
 
 static void compositeOffscreenWindow(GLXDrawable window,

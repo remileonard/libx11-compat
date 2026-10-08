@@ -27,11 +27,15 @@ static LONG CALLBACK onFault(PEXCEPTION_POINTERS info)
         return EXCEPTION_CONTINUE_SEARCH;
 
     /* Call faultTrampoline on fresh stack below the faulting frame: aligned
-     * as at a function entry (rsp % 16 == 8), past the shadow space. */
+     * as at a function entry (sp % 16 == 16 - pointer size), past the
+     * x64 shadow space. */
     CONTEXT *context = info->ContextRecord;
 #if defined(__x86_64__)
     context->Rsp = ((context->Rsp & ~(DWORD64) 15) - 64) - 8;
     context->Rip = (DWORD64) (uintptr_t) faultTrampoline;
+#elif defined(__i386__)
+    context->Esp = ((context->Esp & ~(DWORD) 15) - 64) - 4;
+    context->Eip = (DWORD) (uintptr_t) faultTrampoline;
 #elif defined(__aarch64__)
     context->Sp = (context->Sp & ~(DWORD64) 15) - 64;
     context->Pc = (DWORD64) (uintptr_t) faultTrampoline;

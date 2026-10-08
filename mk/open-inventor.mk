@@ -267,7 +267,9 @@ $(OI_CONFIG_STAMP): mk/open-inventor.mk scripts/open-inventor-cache.cmake \
 
 $(OI_BUILD_STAMP): $(OI_CONFIG_STAMP)
 	@echo "  MAKE    open-inventor"
-	$(Q)env -u MAKEFLAGS -u MFLAGS $(if $(OI_WIN_DLL_PATH),WINE_RUN_DLL_PATH=$(OI_WIN_DLL_PATH)) \
+	$(Q)env -u MAKEFLAGS -u MFLAGS \
+	    $(if $(OI_WIN_DLL_PATH),WINE_RUN_DLL_PATH=$(OI_WIN_DLL_PATH) \
+	        WINE_RUN_ARCH=$(if $(filter i686,$(WINDOWS_ARCH)),win32,win64)) \
 	    $(OI_CMAKE) --build $(OI_BUILD_DIR) \
 	    -j $(OI_JOBS) >> $(OI_LOG) 2>&1 || { \
 	        echo "  FAIL    see $(OI_LOG)" >&2; tail -60 $(OI_LOG) >&2; exit 1; }

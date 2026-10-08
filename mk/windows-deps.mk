@@ -29,7 +29,7 @@ $(WIN_DEP_DIR):
 $(WIN_CMAKE_TOOLCHAIN): mk/windows-deps.mk | $(WIN_DEP_DIR)
 	$(Q){ \
 	    echo 'set(CMAKE_SYSTEM_NAME Windows)'; \
-	    echo 'set(CMAKE_SYSTEM_PROCESSOR x86_64)'; \
+	    echo 'set(CMAKE_SYSTEM_PROCESSOR $(WIN_CMAKE_PROCESSOR))'; \
 	    echo 'set(CMAKE_C_COMPILER $(CC))'; \
 	    echo 'set(CMAKE_CXX_COMPILER $(CXX))'; \
 	    echo 'set(CMAKE_RC_COMPILER $(MINGW_TRIPLE)-windres)'; \
@@ -151,14 +151,16 @@ $(WIN_POSIX_LIB): $(WIN_POSIX_OBJS)
 	@echo "  AR      $@"
 	$(Q)rm -f $@ && $(AR) rcs $@ $^
 
-# Every first-party object needs SDL3/pixman headers from the sysroot.
-$(OBJS): | $(WIN_DEPS_STAMP)
+# Every first-party object needs SDL3/pixman headers from the sysroot. The
+# compat-library objects (mk/xcompat-libs.mk, ...) all depend on the SDL
+# backend stamp, so hang them off the sysroot through it.
+$(OBJS) $(SDL_BACKEND_STAMP): | $(WIN_DEPS_STAMP)
 
 # Distribution: the examples with every DLL they load (libX11-compat, SDL3,
 # SDL3_ttf, and the MinGW runtime), ready to unzip and run on Windows.
-WIN_DIST_DIR := $(OUT)/dist/libx11-compat-win64
-WIN_DIST_ZIP := $(OUT)/dist/libx11-compat-win64.zip
-WIN_RUNTIME_DLLS := libwinpthread-1.dll libgcc_s_seh-1.dll
+WIN_DIST_DIR := $(OUT)/dist/libx11-compat-$(notdir $(OUT))
+WIN_DIST_ZIP := $(OUT)/dist/libx11-compat-$(notdir $(OUT)).zip
+WIN_RUNTIME_DLLS := libwinpthread-1.dll $(WIN_LIBGCC_DLL)
 
 .PHONY: windows-dist
 ## Stage the Windows examples + DLLs and zip them (WINDOWS=1)

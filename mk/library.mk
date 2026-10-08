@@ -83,15 +83,18 @@ $(X11_LINK_CONFIG): FORCE | $(OUT)
 	fi
 
 # The symbols the core objects actually define, so the export list can be
-# intersected against them (see scripts/gen-export-list.sh for why). Darwin nm
-# spells C symbols with a leading underscore; strip it so names match the
-# manifests. Undefined entries (type U) are dropped.
+# intersected against them (see scripts/gen-export-list.sh for why). Darwin and
+# 32-bit Windows nm spell C symbols with a leading underscore; strip it so
+# names match the manifests. Undefined entries (type U) are dropped.
 X11_EXPORT_DEFINED := $(OUT)/libX11-compat.defined-syms
+# Targets whose C symbols carry a leading underscore in nm: Mach-O, and
+# 32-bit x86 PE (the .def file names them without it).
+X11_NM_UNDERSCORE := $(filter Darwin,$(UNAME_S))$(if $(filter Windows/i686,$(UNAME_S)/$(WINDOWS_ARCH)),1)
 $(X11_EXPORT_DEFINED): $(OBJS) $(X11_LINK_CONFIG) | $(OUT)
 	@echo "  GEN     $@"
 	$(Q)$(NM) -g $(OBJS) 2>/dev/null \
 	    | awk '$$1 ~ /^[0-9a-fA-F]+$$/ { print $$NF }' \
-	    | $(if $(filter Darwin,$(UNAME_S)),sed 's/^_//',cat) \
+	    | $(if $(X11_NM_UNDERSCORE),sed 's/^_//',cat) \
 	    | LC_ALL=C sort -u > $@
 	$(Q)test -s $@ || { echo "  ERROR   $@ empty (nm found no defined symbols)" >&2; exit 1; }
 

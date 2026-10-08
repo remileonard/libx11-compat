@@ -20,7 +20,11 @@
 /* SOCKET's base type, as <basetsd.h> defines it. That header itself would
  * also bring INT32 and friends, which collide with <X11/Xmd.h>. */
 #ifndef _BASETSD_H_
+#ifdef _WIN64
 __extension__ typedef unsigned long long UINT_PTR;
+#else
+typedef unsigned int UINT_PTR;
+#endif
 #endif
 
 #ifndef WINAPI
@@ -36,7 +40,7 @@ __declspec(dllimport) int WINAPI select(int nfds,
                                         fd_set *readfds,
                                         fd_set *writefds,
                                         fd_set *exceptfds,
-                                        struct timeval *timeout);
+                                        const struct timeval *timeout);
 #ifdef __cplusplus
 }
 #endif

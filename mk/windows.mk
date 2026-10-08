@@ -16,7 +16,27 @@
 
 ifeq ($(WINDOWS),1)
 
+# WINDOWS_ARCH=i686 builds 32-bit Windows binaries into build/win32. That is
+# the target for unmodified legacy X11/Motif/Open Inventor code: on 64-bit
+# Windows long stays 32 bits (LLP64) while pointers grow, so code written for
+# 32-bit or LP64 UNIX that keeps pointers in long (Open Inventor's SbDict
+# keys, (unsigned long) casts) truncates them. On 32-bit Windows long and
+# pointers are both 32 bits, as on the UNIX systems that code came from.
+WINDOWS_ARCH ?= x86_64
+ifeq ($(WINDOWS_ARCH),i686)
+MINGW_TRIPLE ?= i686-w64-mingw32
+OUT ?= build/win32
+WIN_CMAKE_PROCESSOR := x86
+# 32-bit MinGW unwinds with DWARF-2 tables (libgcc_s_dw2), 64-bit with SEH.
+WIN_LIBGCC_DLL := libgcc_s_dw2-1.dll
+else ifeq ($(WINDOWS_ARCH),x86_64)
 MINGW_TRIPLE ?= x86_64-w64-mingw32
+OUT ?= build/win64
+WIN_CMAKE_PROCESSOR := x86_64
+WIN_LIBGCC_DLL := libgcc_s_seh-1.dll
+else
+$(error WINDOWS_ARCH must be x86_64 or i686, not '$(WINDOWS_ARCH)')
+endif
 # Prefer the posix-threads flavour of the Debian/Ubuntu MinGW packages
 # (winpthreads: pthread_*, clock_gettime, nanosleep); plain <triple>-gcc is
 # that flavour on most other distributions.
@@ -35,7 +55,6 @@ HOST_CC ?= cc
 override XCB := 0
 override SDL_BACKEND := sdl3
 
-OUT ?= build/win64
 TARGET := $(OUT)/libX11-compat.dll
 SHLIB := .dll
 EXE := .exe
@@ -56,5 +75,9 @@ WIN_JPEG_STAMP := $(WIN_DEP_DIR)/.jpeg-stamp
 WIN_COMPAT_CPPFLAGS := -I$(abspath compat/win32/include) -include x11compat-win32.h
 WIN_POSIX_LIB := $(OUT)/libwin32-posix.a
 WIN_POSIX_LDLIBS := $(WIN_POSIX_LIB) -lws2_32 -lpsapi
+
+# Wine prefix for running the build's programs: a 32-bit build needs a win32
+# prefix (scripts/wine-run.sh creates it on first use).
+WIN_WINEPREFIX := $(abspath build)/wineprefix$(if $(filter i686,$(WINDOWS_ARCH)),32)
 
 endif
