@@ -8,13 +8,16 @@
 # scripts/wine-run.sh, so WINE_RUN_ARCH=win32 selects 32-bit Wine. Needs
 # Xvfb and ImageMagick's import.
 #
-# Usage: wine-screenshot.sh <dir> <program.exe> <out.bmp|out.png> [seconds]
+# Usage: wine-screenshot.sh <dir> <program.exe> <out.bmp|out.png> [seconds
+#                           [program arguments...]]
 set -eu
 
 dir=${1:?usage: wine-screenshot.sh <dir> <program.exe> <out.png> [seconds]}
 prog=${2:?usage: wine-screenshot.sh <dir> <program.exe> <out.png> [seconds]}
 out=${3:?usage: wine-screenshot.sh <dir> <program.exe> <out.png> [seconds]}
 seconds=${4:-15}
+shift 3
+[ $# -eq 0 ] || shift
 
 for tool in Xvfb import; do
     command -v "$tool" >/dev/null 2>&1 || {
@@ -51,7 +54,7 @@ done
 
 rm -f "$out_abs"
 (cd "$dir" && DISPLAY=":$display" timeout $((seconds + 30)) \
-    "$root/scripts/wine-run.sh" "./$prog") >"$log" 2>&1 &
+    "$root/scripts/wine-run.sh" "./$prog" "$@") >"$log" 2>&1 &
 app=$!
 sleep "$seconds"
 # A .bmp is written as an uncompressed 24-bit BMP3, the format

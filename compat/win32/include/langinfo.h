@@ -7,8 +7,7 @@
 #define LIBX11_COMPAT_WIN32_LANGINFO_H
 
 #include <locale.h>
-
-typedef int nl_item;
+#include <nl_types.h> /* nl_item */
 
 #define CODESET 0
 #define RADIXCHAR 1

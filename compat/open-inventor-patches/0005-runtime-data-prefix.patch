@@ -1,0 +1,29 @@
+Make the compiled-in data prefix configurable
+
+The font, data, help and demo paths compiled into Open Inventor are the
+install prefix plus a directory. INVENTOR_RUNTIME_PREFIX (default: the
+install prefix, so nothing changes by default) lets a relocatable build use
+"." instead: the Windows zip resolves them from the program's folder. Setting
+CMAKE_INSTALL_PREFIX to "." does not work, as CMake makes it absolute.
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 8a7c6e9..009a884 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -107,9 +107,15 @@ if (NOT INVENTOR_INTERNAL_GLW)
+     find_package(GLw REQUIRED)
+ endif()
+ 
++# Prefix of the data/font/help paths compiled into the libraries and
++# programs. It defaults to the install prefix; a relocatable build sets it to
++# "." so the paths resolve from the program's directory (CMake makes
++# CMAKE_INSTALL_PREFIX itself absolute).
++set(INVENTOR_RUNTIME_PREFIX "${CMAKE_INSTALL_PREFIX}" CACHE STRING
++    "Prefix of the data paths compiled into Open Inventor")
+ macro(ADD_DIRVAR VAR DIR)
+     set(${VAR} ${DIR})
+-    add_definitions(-D${VAR}="${CMAKE_INSTALL_PREFIX}/${DIR}")
++    add_definitions(-D${VAR}="${INVENTOR_RUNTIME_PREFIX}/${DIR}")
+ endmacro()
+ 
+ add_dirvar(IVBINDIR "${CMAKE_INSTALL_BINDIR}")

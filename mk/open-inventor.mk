@@ -132,7 +132,7 @@ endif
 # into the Windows sysroot (mk/windows-deps.mk), iconv comes from the POSIX
 # shims. The build runs its own ppp tool, so CMake runs it through Wine
 # (scripts/wine-run.sh). Data paths are relative to the program's directory
-# (install prefix ".", example data in "data"), so the open-inventor-dist
+# (runtime prefix ".", example data in "data"), so the open-inventor-dist
 # zip runs from wherever it is unpacked. Programs link compat/win32/binmode.c:
 # the C runtime then opens files in binary mode by default, as on UNIX,
 # instead of translating CR/LF and stopping at ^Z, which corrupts binary .iv
@@ -153,7 +153,7 @@ OI_MISSING_HINT := install the MinGW-w64 toolchain
 # _USE_MATH_DEFINES: M_PI and friends, which glibc's g++ exposes by default.
 # APIENTRY: <GL/gl.h> otherwise includes <windows.h> to get it, and its macros
 # (ERROR, Arc, ...) break Open Inventor's own names.
-OI_WIN_CFLAGS := -UWIN32 -D_USE_MATH_DEFINES -DAPIENTRY=__stdcall \
+OI_WIN_CFLAGS := -UWIN32 -D_USE_MATH_DEFINES -DAPIENTRY=__stdcall $(WIN_ARCH_CFLAGS) \
     -I$(abspath compat/win32/include) -include x11compat-win32.h
 OI_WIN_DEPS := $(WIN_FREETYPE_STAMP) $(WIN_JPEG_STAMP) $(WIN_POSIX_LIB) \
     $(WIN_BINMODE_OBJ) $(WIN_GL_CDECL_LIB)
@@ -169,8 +169,8 @@ OI_CACHE_INPUTS := -DLIBX11_COMPAT_WINDOWS=ON \
 OI_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(abspath $(WIN_CMAKE_TOOLCHAIN)) \
     -DCMAKE_CROSSCOMPILING_EMULATOR=$(abspath scripts/wine-run.sh) \
     "-DCMAKE_C_FLAGS=$(OI_WIN_CFLAGS)" "-DCMAKE_CXX_FLAGS=$(OI_WIN_CFLAGS)" \
-    -DINVENTOR_DEMOS=OFF \
-    -DCMAKE_INSTALL_PREFIX=. -DINVENTOR_EXAMPLES_DATADIR=data \
+    -DINVENTOR_DEMOS=ON \
+    -DINVENTOR_RUNTIME_PREFIX=. -DINVENTOR_EXAMPLES_DATADIR=data \
     -DCMAKE_EXE_LINKER_FLAGS=$(abspath $(WIN_BINMODE_OBJ))
 endif
 
@@ -390,9 +390,13 @@ check-open-inventor:
 endif
 
 ifeq ($(OI_PLATFORM),windows)
-# Distribution: the Mentor examples with every DLL they load, the example
-# data and the fonts (copied, with their licenses), laid out so the relative
-# paths compiled in (data, ./share/inventor/fonts) resolve from the folder.
+# Distribution: the Mentor examples, Open Inventor's tools (ivview, ivcat, ...)
+# and demos (SceneViewer, maze, drop, ...) with every DLL they load, the
+# example data, the models/demo data/help from Open Inventor's own install,
+# and the fonts (copied, with their licenses). The install is flattened so the
+# programs sit next to the DLLs and the relative paths compiled in (data,
+# ./share/inventor/...) resolve from the folder. chesschairs.iv, which the
+# install would convert to binary with the host's ivcat, ships as ASCII.
 OI_DIST_NAME := open-inventor-$(notdir $(OUT))
 OI_DIST_DIR := $(OUT)/dist/$(OI_DIST_NAME)
 OI_DIST_ZIP := $(OUT)/dist/$(OI_DIST_NAME).zip
@@ -418,6 +422,18 @@ $(OI_DIST_ZIP): $(OI_BUILD_STAMP) $(OI_FONT_STAMP) \
 	    cp "$$path" $(OI_DIST_DIR)/; \
 	done
 	$(Q)cp -R $(OI_SRC_DIR)/apps/examples/data $(OI_DIST_DIR)/data
+	$(Q)stage=$(abspath $(OI_DIST_DIR))/.stage; rm -rf "$$stage"; \
+	mkdir -p "$$stage" && cd "$$stage" && \
+	$(OI_CMAKE) --install $(abspath $(OI_BUILD_DIR)) --prefix "$$stage" \
+	    >> $(OI_LOG) 2>&1 || { echo "  FAIL    see $(OI_LOG)" >&2; exit 1; }
+	$(Q)stage=$(OI_DIST_DIR)/.stage; \
+	cp "$$stage"/bin/*.exe $(OI_DIST_DIR)/ && \
+	cp -f "$$stage"/libexec/inventor/*.exe $(OI_DIST_DIR)/ && \
+	cp -R "$$stage"/share/inventor/data "$$stage"/share/inventor/help \
+	    $(OI_DIST_DIR)/share/inventor/ && \
+	cp $(OI_SRC_DIR)/data/models/scenes/chesschairs.iv.asc \
+	    $(OI_DIST_DIR)/share/inventor/data/models/scenes/chesschairs.iv && \
+	rm -rf "$$stage"
 	$(Q)for font in $(OI_FONT_DIR)/*; do \
 	    cp -L "$$font" $(OI_DIST_DIR)/share/inventor/fonts/; \
 	    file=$$(readlink -f "$$font"); \

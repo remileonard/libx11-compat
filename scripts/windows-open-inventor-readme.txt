@@ -8,6 +8,20 @@ system opengl32.dll. No X server and no Windows port of the toolkit
 (SoWin) are involved.
 
 Programs
+  Tools and demos (from cmd, in this folder):
+  ivview.exe FILE.iv          view a model, e.g.
+                              ivview share\inventor\data\models\toys\lavalamp.iv
+  SceneViewer.exe [FILE.iv]   the full scene viewer and editor
+  gview.exe FILE.iv           scene graph browser, e.g.
+                              gview share\inventor\data\demos\windmill.iv
+  qmorf.exe FILE.iv FILE.iv   shape morphing, e.g. the three files in
+                              share\inventor\data\models\CyberHeads
+  maze.exe, drop.exe, noodle.exe, revo.exe, textomatic.exe
+                              demos that need no argument
+  ivcat, ivinfo, ivfix, ivnorm, ivAddVP, ivperf, ivdowngrade
+                              command-line tools for .iv files
+  More models: share\inventor\data\models
+
   The 66 examples of "The Inventor Mentor", e.g.
   02.1.HelloCone.exe     a red cone in a render area
   02.4.Examiner.exe      the same cone in the examiner viewer (drag to rotate)
@@ -16,10 +30,10 @@ Programs
   13.7.Rotor.exe         an animated windmill
   15.1.ConeRadius.exe    a dragger driving the scene
 
-Run any .exe from this folder (double-click, or from cmd to see console
-output). Keep the folder layout: the programs load their DLLs from here,
-read example models and textures from data\ and fonts from
-share\inventor\fonts\ relative to the current directory.
+Run any .exe from this folder (double-click, or from cmd after cd-ing into
+it, to see console output and pass files). Keep the folder layout: the
+programs load their DLLs from here and read models, textures, fonts and help
+from data\ and share\inventor\ relative to the current directory.
 
 Some examples are console programs, need command-line arguments, or need
 overlay planes / color-index visuals, which are not available.
@@ -43,10 +57,15 @@ Xlib, Xt et Motif viennent de libx11-compat (une Xlib en processus au-dessus
 de SDL3), OpenGL du opengl32.dll du système. Ni serveur X, ni portage
 Windows du toolkit (SoWin).
 
-Lancez n'importe quel .exe depuis ce dossier (double-clic, ou depuis cmd pour
-voir la sortie console). Gardez l'arborescence : les programmes chargent
-leurs DLL depuis ce dossier, lisent les modèles et textures dans data\ et
-les polices dans share\inventor\fonts\, relativement au dossier courant.
+Lancez n'importe quel .exe depuis ce dossier (double-clic, ou depuis cmd
+après un cd dans le dossier, pour voir la sortie console et passer des
+fichiers). Gardez l'arborescence : les programmes chargent leurs DLL depuis
+ce dossier et lisent modèles, textures, polices et aide dans data\ et
+share\inventor\, relativement au dossier courant.
+
+Outils et démos : ivview, SceneViewer, gview et qmorf prennent des fichiers
+.iv (exemples ci-dessus) ; maze, drop, noodle, revo et textomatic se lancent
+sans argument.
 
 Ce sont volontairement des programmes 32 bits : le code d'origine range des
 pointeurs dans des `long`, qui restent sur 32 bits en Windows 64 bits ;

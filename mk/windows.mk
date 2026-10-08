@@ -27,10 +27,17 @@ ifeq ($(WINDOWS_ARCH),i686)
 MINGW_TRIPLE ?= i686-w64-mingw32
 OUT ?= build/win32
 WIN_CMAKE_PROCESSOR := x86
+# Floating point as on 64-bit: SSE2, no x87 excess precision. With x87, GCC
+# evaluates float constants in long double, so Open Inventor's
+# `getIVVersion() < 2.1f` held for a 2.1 file (2.1f as 2.1L > (float) 2.1)
+# and it misread every V2.1 binary file as the 2.0 format. Every x86 PC that
+# runs a supported Windows has SSE2.
+WIN_ARCH_CFLAGS := -msse2 -mfpmath=sse
 # 32-bit MinGW unwinds with DWARF-2 tables (libgcc_s_dw2), 64-bit with SEH.
 WIN_LIBGCC_DLL := libgcc_s_dw2-1.dll
 else ifeq ($(WINDOWS_ARCH),x86_64)
 MINGW_TRIPLE ?= x86_64-w64-mingw32
+WIN_ARCH_CFLAGS :=
 OUT ?= build/win64
 WIN_CMAKE_PROCESSOR := x86_64
 WIN_LIBGCC_DLL := libgcc_s_seh-1.dll
