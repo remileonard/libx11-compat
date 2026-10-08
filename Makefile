@@ -53,12 +53,12 @@ include mk/micropolis.mk
 include mk/gl4es.mk
 include mk/mesa-demos.mk
 include mk/glx-direct.mk
+include mk/windows-motif.mk
 include mk/open-inventor.mk
 include mk/tests.mk
 include mk/examples.mk
 include mk/wasm-deps.mk
 include mk/windows-deps.mk
-include mk/windows-motif.mk
 include mk/wasm-motif.mk
 include mk/wasm-apps.mk
 include mk/wasm-mosaic.mk

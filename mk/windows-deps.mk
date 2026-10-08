@@ -12,10 +12,14 @@ WIN_SDL3_URL := https://github.com/libsdl-org/SDL.git
 WIN_SDL3_REVISION := f5e5f6588921eed3d7d048ce43d9eb1ff0da0ffc # release-3.2.30
 WIN_SDL3_TTF_URL := https://github.com/libsdl-org/SDL_ttf.git
 WIN_SDL3_TTF_REVISION := a1ce3670aec736ecbf0936c43f2f0cc53aa61e5b # release-3.2.2
+# Open Inventor only (mk/open-inventor.mk): libFL renders text through
+# FreeType, libimage reads JPEG. Static, so they add no DLLs.
+WIN_FREETYPE_URL := https://github.com/freetype/freetype.git
+WIN_FREETYPE_REVISION := 534ad3456055ee1f65ecde3bcf22a656a31514d1 # VER-2-13-3
+WIN_JPEG_URL := https://github.com/libjpeg-turbo/libjpeg-turbo.git
+WIN_JPEG_REVISION := f29eda648547b36aa594c4116c7764a6c8a079b9 # 3.0.4
 
-WIN_DEP_DIR := $(OUT)/win-deps
 WIN_DEPS_STAMP := $(WIN_SYSROOT)/.deps-stamp
-WIN_CMAKE_TOOLCHAIN := $(WIN_DEP_DIR)/mingw-toolchain.cmake
 WIN_GIT_Q := $(if $(filter 1,$(V)),,--quiet)
 WIN_LOG := $(abspath $(WIN_DEP_DIR))/build.log
 
@@ -78,6 +82,32 @@ $(WIN_SDL3_TTF_STAMP): $(WIN_SDL3_STAMP)
 	    -DSDLTTF_VENDORED=ON -DSDLTTF_HARFBUZZ=OFF -DSDLTTF_PLUTOSVG=OFF \
 	    -DSDLTTF_SAMPLES=OFF >> $(WIN_LOG) 2>&1 || $(win_fail)
 	$(Q)ninja -C $(WIN_DEP_DIR)/SDL_ttf/build install >> $(WIN_LOG) 2>&1 || $(win_fail)
+	$(Q)touch $@
+
+# FreeType without its optional codecs (zlib, bzip2, PNG, HarfBuzz, Brotli):
+# libFL only rasterizes outline fonts.
+$(WIN_FREETYPE_STAMP): $(WIN_CMAKE_TOOLCHAIN)
+	@echo "  WINDEP  freetype"
+	$(call win_git_checkout,$(WIN_FREETYPE_URL),$(WIN_DEP_DIR)/freetype,$(WIN_FREETYPE_REVISION))
+	$(Q)cmake -S $(WIN_DEP_DIR)/freetype -B $(WIN_DEP_DIR)/freetype/build -G Ninja \
+	    -DCMAKE_TOOLCHAIN_FILE=$(abspath $(WIN_CMAKE_TOOLCHAIN)) \
+	    -DCMAKE_INSTALL_PREFIX=$(WIN_SYSROOT) -DCMAKE_BUILD_TYPE=Release \
+	    -DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=ON -DFT_DISABLE_BZIP2=ON \
+	    -DFT_DISABLE_PNG=ON -DFT_DISABLE_HARFBUZZ=ON -DFT_DISABLE_BROTLI=ON \
+	    >> $(WIN_LOG) 2>&1 || $(win_fail)
+	$(Q)ninja -C $(WIN_DEP_DIR)/freetype/build install >> $(WIN_LOG) 2>&1 || $(win_fail)
+	$(Q)touch $@
+
+# libjpeg-turbo without the SIMD (nasm) code, static only.
+$(WIN_JPEG_STAMP): $(WIN_CMAKE_TOOLCHAIN)
+	@echo "  WINDEP  libjpeg-turbo"
+	$(call win_git_checkout,$(WIN_JPEG_URL),$(WIN_DEP_DIR)/libjpeg-turbo,$(WIN_JPEG_REVISION))
+	$(Q)cmake -S $(WIN_DEP_DIR)/libjpeg-turbo -B $(WIN_DEP_DIR)/libjpeg-turbo/build -G Ninja \
+	    -DCMAKE_TOOLCHAIN_FILE=$(abspath $(WIN_CMAKE_TOOLCHAIN)) \
+	    -DCMAKE_INSTALL_PREFIX=$(WIN_SYSROOT) -DCMAKE_BUILD_TYPE=Release \
+	    -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DWITH_SIMD=OFF \
+	    -DWITH_TURBOJPEG=OFF >> $(WIN_LOG) 2>&1 || $(win_fail)
+	$(Q)ninja -C $(WIN_DEP_DIR)/libjpeg-turbo/build install >> $(WIN_LOG) 2>&1 || $(win_fail)
 	$(Q)touch $@
 
 # pixman reuses the pinned, digest-checked tarball of the wasm leg

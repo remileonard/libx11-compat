@@ -43,6 +43,11 @@ EXE := .exe
 # Cross-built SDL3 / SDL3_ttf / pixman (mk/windows-deps.mk). Deterministic
 # paths, so no parse-time pkg-config against a not-yet-built .pc is needed.
 WIN_SYSROOT := $(abspath $(OUT))/win-sysroot
+WIN_DEP_DIR := $(OUT)/win-deps
+WIN_CMAKE_TOOLCHAIN := $(WIN_DEP_DIR)/mingw-toolchain.cmake
+# Built only for Open Inventor (mk/open-inventor.mk).
+WIN_FREETYPE_STAMP := $(WIN_DEP_DIR)/.freetype-stamp
+WIN_JPEG_STAMP := $(WIN_DEP_DIR)/.jpeg-stamp
 
 # The toolkit libraries (libXt, Xmu, Motif, ...) compile upstream sources with
 # their own flag sets; they need the same POSIX shim headers as the core, and

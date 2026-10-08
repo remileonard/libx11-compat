@@ -88,6 +88,10 @@ endef
 #   OI_EGL_LIB      the EGL provider libx11-compat loads (LIBX11_COMPAT_EGL)
 #   OI_DSO          Open Inventor's shared-library suffix (CMake's choice)
 OI_PLATFORM :=
+OI_MOTIF_LIB := $(MOTIF_LIBXM)
+OI_MOTIF_BUILD_DIR := $(MOTIF_BUILD_DIR)
+OI_MOTIF_STAMP := $(MOTIF_STAGE_STAMP)
+OI_GLU_BUILT := 1
 ifeq ($(GLX)/$(UNAME_S),1/Linux)
 OI_PLATFORM := linux
 OI_OPENGL_LIB := $(shell $(CC) -print-file-name=libOpenGL.so 2>/dev/null)
@@ -121,6 +125,46 @@ OI_CMAKE_FLAGS += $(if $(OI_BREW_PREFIX),-DCMAKE_PREFIX_PATH=$(OI_BREW_PREFIX)) 
 endif
 endif
 
+# Windows (make WINDOWS=1, a MinGW-w64 cross build): gl* from the system
+# opengl32, whose WGL contexts are the compatibility profile; glX* from
+# libx11-compat, which runs GLX on WGL (src/egl-wgl.c); GLU from glu32; Motif
+# is libXm.dll (mk/windows-motif.mk). FreeType and libjpeg are cross-built
+# into the Windows sysroot (mk/windows-deps.mk), iconv comes from the POSIX
+# shims. The build runs its own ppp tool, so CMake runs it through Wine
+# (scripts/wine-run.sh).
+ifeq ($(GLX)/$(UNAME_S),1/Windows)
+OI_PLATFORM := windows
+OI_GLU_BUILT :=
+OI_OPENGL_LIB := $(shell $(CC) -print-file-name=libopengl32.a 2>/dev/null)
+OI_OPENGL_DEP :=
+OI_DSO := .dll
+OI_GLU_LIB := $(shell $(CC) -print-file-name=libglu32.a 2>/dev/null)
+OI_MOTIF_LIB := $(MOTIF_WIN_LIBXM)
+OI_MOTIF_BUILD_DIR := $(MOTIF_WIN_BUILD_DIR)
+OI_MOTIF_STAMP := $(MOTIF_WIN_BUILD_STAMP)
+OI_MISSING_HINT := install the MinGW-w64 toolchain
+# MinGW's GNU C mode predefines WIN32, which would flip the X headers onto
+# their native-Windows paths; the compat stack uses their POSIX view.
+# _USE_MATH_DEFINES: M_PI and friends, which glibc's g++ exposes by default.
+# APIENTRY: <GL/gl.h> otherwise includes <windows.h> to get it, and its macros
+# (ERROR, Arc, ...) break Open Inventor's own names.
+OI_WIN_CFLAGS := -UWIN32 -D_USE_MATH_DEFINES -DAPIENTRY=__stdcall \
+    -I$(abspath compat/win32/include) -include x11compat-win32.h
+OI_WIN_DEPS := $(WIN_FREETYPE_STAMP) $(WIN_JPEG_STAMP) $(WIN_POSIX_LIB)
+# DLL directories for the build-time tools Wine runs: the compat stack, SDL3,
+# and the MinGW C/C++ runtime.
+OI_WIN_DLL_PATH := $(abspath $(OUT)):$(WIN_SYSROOT)/bin:$(abspath $(OI_BUILD_DIR))/lib:$(abspath $(OI_BUILD_DIR))/libimage:$(abspath $(OI_BUILD_DIR))/libFL:$(dir $(shell $(CXX) -print-file-name=libstdc++-6.dll 2>/dev/null)):$(dir $(shell $(CC) -print-file-name=libwinpthread-1.dll 2>/dev/null))
+# Inputs of scripts/open-inventor-cache.cmake, so they go before its -C.
+OI_CACHE_INPUTS := -DLIBX11_COMPAT_WINDOWS=ON \
+    -DLIBX11_COMPAT_MOTIF=$(abspath $(MOTIF_WIN_LIBXM)).a \
+    -DLIBX11_COMPAT_ICONV=$(abspath $(WIN_POSIX_LIB)) \
+    -DLIBX11_COMPAT_ICONV_INCLUDE=$(abspath compat/win32/include)
+OI_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(abspath $(WIN_CMAKE_TOOLCHAIN)) \
+    -DCMAKE_CROSSCOMPILING_EMULATOR=$(abspath scripts/wine-run.sh) \
+    "-DCMAKE_C_FLAGS=$(OI_WIN_CFLAGS)" "-DCMAKE_CXX_FLAGS=$(OI_WIN_CFLAGS)" \
+    -DINVENTOR_DEMOS=OFF
+endif
+
 ifdef OI_PLATFORM
 
 $(OI_SRC_STAMP): mk/open-inventor.mk $(OI_PATCHES) $(OI_PATCH_LIST_FILE)
@@ -140,6 +184,8 @@ open-inventor-fetch: $(OI_SRC_STAMP) $(GLU_SRC_STAMP)
 
 # GLU, compiled straight from the source list in its meson.build (no meson
 # needed) and linked against libOpenGL only, so it brings no libGL/libGLX.
+# Windows uses the system glu32 instead (OI_GLU_BUILT empty).
+ifdef OI_GLU_BUILT
 $(OI_GLU_LIB): $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h $(GL_HDR_CACHE)/GL/glext.h \
     include/KHR/khrplatform.h $(OI_OPENGL_DEP)
 	@echo "  CC      glu"
@@ -161,6 +207,7 @@ $(OI_GLU_LIB): $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h $(GL_HDR_CACHE)/GL/glext
 	$(OI_CXX) $(OI_GLU_LINK) -o $(OI_GLU_DIR)/$(OI_GLU_REAL) $$objs \
 	    $(OI_OPENGL_LIB)
 	$(Q)ln -sf $(OI_GLU_REAL) $@
+endif
 
 # One include root holding X11/, Xm/ and GL/ so the CMake cache can point every
 # X/GL include dir at it: the staged upstream X11 headers overlaid with the
@@ -168,7 +215,7 @@ $(OI_GLU_LIB): $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h $(GL_HDR_CACHE)/GL/glext
 # (pristine gl.h/glext.h, our glx.h, GLU's glu.h, and the in-tree
 # KHR/khrplatform.h glext.h includes: macOS has no system copy).
 $(OI_SYSROOT_STAMP): mk/open-inventor.mk $(UPSTREAM_HEADERS_STAMP) \
-    $(MOTIF_STAGE_STAMP) $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h \
+    $(OI_MOTIF_STAMP) $(GLU_SRC_STAMP) $(GL_HDR_CACHE)/GL/gl.h \
     $(GL_HDR_CACHE)/GL/glext.h include/KHR/khrplatform.h
 	@echo "  SYSROOT open-inventor"
 	$(Q)rm -rf $(OI_SYSROOT)
@@ -188,7 +235,7 @@ $(OI_SYSROOT_STAMP): mk/open-inventor.mk $(UPSTREAM_HEADERS_STAMP) \
 	    [ -e "$(OI_SYSROOT)/X11/$$b" ] || ln -sf "$$e" "$(OI_SYSROOT)/X11/$$b"; \
 	done
 	$(Q)for h in $(abspath $(MOTIF_SRC_DIR))/lib/Xm/*.h \
-	             $(abspath $(MOTIF_BUILD_DIR))/lib/Xm/*.h; do \
+	             $(abspath $(OI_MOTIF_BUILD_DIR))/lib/Xm/*.h; do \
 	    ln -sf "$$h" "$(OI_SYSROOT)/Xm/$$(basename "$$h")"; \
 	done
 	$(Q)ln -sf $(abspath $(GL_HDR_CACHE))/GL/gl.h \
@@ -197,11 +244,11 @@ $(OI_SYSROOT_STAMP): mk/open-inventor.mk $(UPSTREAM_HEADERS_STAMP) \
 	$(Q)touch $@
 
 OI_COMPAT_LIBS := $(TARGET) $(LIBXT_TARGET) $(XI_COMPAT_TARGET) \
-    $(XEXT_COMPAT_TARGET) $(ICE_COMPAT_TARGET) $(SM_COMPAT_TARGET) $(MOTIF_LIBXM)
+    $(XEXT_COMPAT_TARGET) $(ICE_COMPAT_TARGET) $(SM_COMPAT_TARGET) $(OI_MOTIF_LIB)
 
 $(OI_CONFIG_STAMP): mk/open-inventor.mk scripts/open-inventor-cache.cmake \
     $(OI_SRC_STAMP) $(OI_SYSROOT_STAMP) $(OI_GLU_LIB) $(OI_COMPAT_LIBS) \
-    $(OI_OPENGL_DEP)
+    $(OI_OPENGL_DEP) $(OI_WIN_DEPS)
 	@echo "  CMAKE   open-inventor"
 	$(Q)test -f "$(OI_OPENGL_LIB)" || { \
 	    echo "  FAIL    no gl-only GL library $(OI_OPENGL_LIB) ($(OI_MISSING_HINT))" >&2; \
@@ -212,7 +259,7 @@ $(OI_CONFIG_STAMP): mk/open-inventor.mk scripts/open-inventor-cache.cmake \
 	    -DLIBX11_COMPAT_LIBDIR=$(abspath $(OUT)) \
 	    -DLIBX11_COMPAT_SYSROOT=$(abspath $(OI_SYSROOT)) \
 	    -DLIBX11_COMPAT_GLU=$(abspath $(OI_GLU_LIB)) \
-	    -DLIBX11_COMPAT_OPENGL=$(OI_OPENGL_LIB) \
+	    -DLIBX11_COMPAT_OPENGL=$(OI_OPENGL_LIB) $(OI_CACHE_INPUTS) \
 	    -C $(abspath scripts/open-inventor-cache.cmake) \
 	    $(OI_CMAKE_FLAGS) > $(OI_LOG) 2>&1 || { \
 	        echo "  FAIL    see $(OI_LOG)" >&2; tail -40 $(OI_LOG) >&2; exit 1; }
@@ -220,7 +267,8 @@ $(OI_CONFIG_STAMP): mk/open-inventor.mk scripts/open-inventor-cache.cmake \
 
 $(OI_BUILD_STAMP): $(OI_CONFIG_STAMP)
 	@echo "  MAKE    open-inventor"
-	$(Q)env -u MAKEFLAGS -u MFLAGS $(OI_CMAKE) --build $(OI_BUILD_DIR) \
+	$(Q)env -u MAKEFLAGS -u MFLAGS $(if $(OI_WIN_DLL_PATH),WINE_RUN_DLL_PATH=$(OI_WIN_DLL_PATH)) \
+	    $(OI_CMAKE) --build $(OI_BUILD_DIR) \
 	    -j $(OI_JOBS) >> $(OI_LOG) 2>&1 || { \
 	        echo "  FAIL    see $(OI_LOG)" >&2; tail -60 $(OI_LOG) >&2; exit 1; }
 	$(Q)touch $@
@@ -246,7 +294,7 @@ OI_USER_CXXFLAGS := -O2 -std=$(OI_USER_STD) -Wno-write-strings \
         lib/nodekits/include,-I$(OI_SRC_DIR)/$(d)) \
     -isystem $(OI_SYSROOT)
 OI_USER_LIBS := $(OI_BUILD_DIR)/libSoXt/libInventorXt$(OI_DSO) \
-    $(OI_BUILD_DIR)/lib/libInventor$(OI_DSO) $(MOTIF_LIBXM) $(LIBXT_TARGET) \
+    $(OI_BUILD_DIR)/lib/libInventor$(OI_DSO) $(OI_MOTIF_LIB) $(LIBXT_TARGET) \
     $(XI_COMPAT_TARGET) $(TARGET) $(OI_GLU_LIB) $(OI_OPENGL_LIB)
 OI_USER_RPATH := $(foreach d,$(OUT) $(OI_GLU_DIR) $(OI_BUILD_DIR)/libSoXt \
     $(OI_BUILD_DIR)/lib,-Wl$(comma)-rpath$(comma)$(abspath $(d)))

@@ -104,3 +104,43 @@ int getpwnam_r(const char *name,
     *result = NULL;
     return user ? copyUser(user, pwd, buf, size, result) : 0;
 }
+
+/* drand48 family: X(n+1) = (a * X(n) + c) mod 2^48, as POSIX specifies. */
+static unsigned long long rand48State = 0x1234ABCD330EULL;
+
+static unsigned long long rand48Next(void)
+{
+    rand48State = (0x5DEECE66DULL * rand48State + 0xB) & 0xFFFFFFFFFFFFULL;
+    return rand48State;
+}
+
+double drand48(void)
+{
+    return (double) rand48Next() / 281474976710656.0; /* 2^48 */
+}
+
+long lrand48(void)
+{
+    return (long) (rand48Next() >> 17); /* the high 31 bits */
+}
+
+void srand48(long seed)
+{
+    rand48State = ((unsigned long long) (unsigned long) seed << 16) | 0x330E;
+}
+
+/* Legacy BSD calls, defined but not declared: old code declares them itself
+ * (Open Inventor's NURBS code, with an int length), and a second prototype
+ * would conflict with that one. */
+void bcopy(const void *src, void *dst, size_t n);
+void bzero(void *s, size_t n);
+
+void bcopy(const void *src, void *dst, size_t n)
+{
+    memmove(dst, src, n);
+}
+
+void bzero(void *s, size_t n)
+{
+    memset(s, 0, n);
+}

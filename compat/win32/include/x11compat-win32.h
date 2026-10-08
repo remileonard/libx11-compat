@@ -17,6 +17,10 @@
 extern "C" {
 #endif
 
+/* u_char, u_short, u_int, u_long: glibc's <sys/types.h> has them; MinGW keeps
+ * them in a header of their own (shared with <winsock2.h>). */
+#include <_bsd_types.h>
+
 /* struct timeval's tv_usec type in POSIX; MinGW's timeval uses long. */
 typedef long suseconds_t;
 
@@ -48,6 +52,10 @@ __declspec(dllimport) int __stdcall gethostname(char *name, int namelen);
 
 int setenv(const char *name, const char *value, int overwrite);
 int unsetenv(const char *name);
+/* The POSIX 48-bit linear congruential generator (<stdlib.h>). */
+double drand48(void);
+long lrand48(void);
+void srand48(long seed);
 /* POSIX rename() semantics (replace an existing target); see src/util.h. */
 int x11compatRenameReplace(const char *from, const char *to);
 
