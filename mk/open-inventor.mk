@@ -133,7 +133,10 @@ endif
 # shims. The build runs its own ppp tool, so CMake runs it through Wine
 # (scripts/wine-run.sh). Data paths are relative to the program's directory
 # (install prefix ".", example data in "data"), so the open-inventor-dist
-# zip runs from wherever it is unpacked.
+# zip runs from wherever it is unpacked. Programs link compat/win32/binmode.c:
+# the C runtime then opens files in binary mode by default, as on UNIX,
+# instead of translating CR/LF and stopping at ^Z, which corrupts binary .iv
+# files.
 ifeq ($(GLX)/$(UNAME_S),1/Windows)
 OI_PLATFORM := windows
 OI_GLU_BUILT :=
@@ -152,7 +155,8 @@ OI_MISSING_HINT := install the MinGW-w64 toolchain
 # (ERROR, Arc, ...) break Open Inventor's own names.
 OI_WIN_CFLAGS := -UWIN32 -D_USE_MATH_DEFINES -DAPIENTRY=__stdcall \
     -I$(abspath compat/win32/include) -include x11compat-win32.h
-OI_WIN_DEPS := $(WIN_FREETYPE_STAMP) $(WIN_JPEG_STAMP) $(WIN_POSIX_LIB)
+OI_WIN_DEPS := $(WIN_FREETYPE_STAMP) $(WIN_JPEG_STAMP) $(WIN_POSIX_LIB) \
+    $(WIN_BINMODE_OBJ) $(WIN_GL_CDECL_LIB)
 # DLL directories for the build-time tools Wine runs: the compat stack, SDL3,
 # and the MinGW C/C++ runtime.
 OI_WIN_DLL_PATH := $(abspath $(OUT)):$(WIN_SYSROOT)/bin:$(abspath $(OI_BUILD_DIR))/lib:$(abspath $(OI_BUILD_DIR))/libimage:$(abspath $(OI_BUILD_DIR))/libFL:$(dir $(shell $(CXX) -print-file-name=libstdc++-6.dll 2>/dev/null)):$(dir $(shell $(CC) -print-file-name=libwinpthread-1.dll 2>/dev/null))
@@ -160,12 +164,14 @@ OI_WIN_DLL_PATH := $(abspath $(OUT)):$(WIN_SYSROOT)/bin:$(abspath $(OI_BUILD_DIR
 OI_CACHE_INPUTS := -DLIBX11_COMPAT_WINDOWS=ON \
     -DLIBX11_COMPAT_MOTIF=$(abspath $(MOTIF_WIN_LIBXM)).a \
     -DLIBX11_COMPAT_ICONV=$(abspath $(WIN_POSIX_LIB)) \
-    -DLIBX11_COMPAT_ICONV_INCLUDE=$(abspath compat/win32/include)
+    -DLIBX11_COMPAT_ICONV_INCLUDE=$(abspath compat/win32/include) \
+    $(if $(WIN_GL_CDECL_LIB),-DLIBX11_COMPAT_GL_CDECL=$(abspath $(WIN_GL_CDECL_LIB)))
 OI_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(abspath $(WIN_CMAKE_TOOLCHAIN)) \
     -DCMAKE_CROSSCOMPILING_EMULATOR=$(abspath scripts/wine-run.sh) \
     "-DCMAKE_C_FLAGS=$(OI_WIN_CFLAGS)" "-DCMAKE_CXX_FLAGS=$(OI_WIN_CFLAGS)" \
     -DINVENTOR_DEMOS=OFF \
-    -DCMAKE_INSTALL_PREFIX=. -DINVENTOR_EXAMPLES_DATADIR=data
+    -DCMAKE_INSTALL_PREFIX=. -DINVENTOR_EXAMPLES_DATADIR=data \
+    -DCMAKE_EXE_LINKER_FLAGS=$(abspath $(WIN_BINMODE_OBJ))
 endif
 
 ifdef OI_PLATFORM

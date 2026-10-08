@@ -23,6 +23,7 @@
 # and the find modules in scripts/open-inventor-cmake-windows/ replace CMake's
 # UNIX-only FindX11/FindMotif. LIBX11_COMPAT_MOTIF names the Motif library
 # and LIBX11_COMPAT_ICONV the POSIX shim archive that provides iconv.
+# LIBX11_COMPAT_GL_CDECL (32-bit only) is the archive of cdecl gl* wrappers.
 
 foreach(var LIBX11_COMPAT_LIBDIR LIBX11_COMPAT_SYSROOT LIBX11_COMPAT_GLU
             LIBX11_COMPAT_OPENGL)

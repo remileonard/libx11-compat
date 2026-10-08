@@ -12,10 +12,20 @@ set(OPENGL_GLU_FOUND TRUE)
 set(OPENGL_LIBRARIES "${OPENGL_gl_LIBRARY};${OPENGL_glx_LIBRARY}")
 if(NOT TARGET OpenGL::GL)
     add_library(OpenGL::GL UNKNOWN IMPORTED)
+    if(LIBX11_COMPAT_GL_CDECL)
+        # 32-bit: gl* are declared cdecl (compat/win32/include/GL/gl.h), so
+        # link the cdecl wrappers first, then opengl32 they call into.
+        set_target_properties(OpenGL::GL PROPERTIES
+            IMPORTED_LOCATION "${LIBX11_COMPAT_GL_CDECL}"
+            INTERFACE_LINK_LIBRARIES
+                "${OPENGL_gl_LIBRARY};${OPENGL_glx_LIBRARY}")
+    else()
+        set_target_properties(OpenGL::GL PROPERTIES
+            IMPORTED_LOCATION "${OPENGL_gl_LIBRARY}"
+            INTERFACE_LINK_LIBRARIES "${OPENGL_glx_LIBRARY}")
+    endif()
     set_target_properties(OpenGL::GL PROPERTIES
-        IMPORTED_LOCATION "${OPENGL_gl_LIBRARY}"
-        INTERFACE_INCLUDE_DIRECTORIES "${OPENGL_INCLUDE_DIR}"
-        INTERFACE_LINK_LIBRARIES "${OPENGL_glx_LIBRARY}")
+        INTERFACE_INCLUDE_DIRECTORIES "${OPENGL_INCLUDE_DIR}")
 endif()
 if(NOT TARGET OpenGL::GLU)
     add_library(OpenGL::GLU UNKNOWN IMPORTED)

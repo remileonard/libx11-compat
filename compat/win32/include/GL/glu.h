@@ -15,11 +15,28 @@
  * __stdcall thunk that calls it as cdecl (compat/win32/glu-callbacks.c). The
  * thunk's argument count comes from the callback selector. 64-bit Windows has
  * a single calling convention, so there the header is just the real one.
+ *
+ * With <GL/gl.h> making gl* cdecl on Win32 (see that header), a GL entry
+ * point registered as a callback is one of the cdecl wrappers, and gets a
+ * thunk like any other function; the opengl32/glu32 pass-through covers
+ * code that reaches the native entry points.
  */
 #ifndef LIBX11_COMPAT_WIN32_GL_GLU_H
 #define LIBX11_COMPAT_WIN32_GL_GLU_H
 
+/* gl.h first, through the wrapper next to this file (cdecl gl* on Win32).
+ * GLU itself is glu32.dll's: its entry points and _GLUfuncptr stay __stdcall
+ * whatever convention gl.h chose. */
+#include <GL/gl.h>
+#if defined(_WIN32) && defined(__i386__)
+#pragma push_macro("GLAPIENTRY")
+#undef GLAPIENTRY
+#define GLAPIENTRY __stdcall
 #include_next <GL/glu.h>
+#pragma pop_macro("GLAPIENTRY")
+#else
+#include_next <GL/glu.h>
+#endif
 
 #if defined(_WIN32) && defined(__i386__)
 

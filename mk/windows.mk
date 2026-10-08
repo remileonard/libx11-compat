@@ -76,6 +76,14 @@ WIN_COMPAT_CPPFLAGS := -I$(abspath compat/win32/include) -include x11compat-win3
 WIN_POSIX_LIB := $(OUT)/libwin32-posix.a
 WIN_POSIX_LDLIBS := $(WIN_POSIX_LIB) -lws2_32 -lpsapi
 
+# Linked into programs that expect UNIX file semantics (binary-mode fopen);
+# see compat/win32/binmode.c. Built by mk/windows-deps.mk.
+WIN_BINMODE_OBJ := $(OUT)/compat/win32/binmode-exe.o
+
+# 32-bit only: cdecl gl* over opengl32's __stdcall entry points, for code
+# compiled with compat/win32/include/GL/gl.h (mk/windows-deps.mk).
+WIN_GL_CDECL_LIB := $(if $(filter i686,$(WINDOWS_ARCH)),$(OUT)/libopengl32-cdecl.a)
+
 # Wine prefix for running the build's programs: a 32-bit build needs a win32
 # prefix (scripts/wine-run.sh creates it on first use).
 WIN_WINEPREFIX := $(abspath build)/wineprefix$(if $(filter i686,$(WINDOWS_ARCH)),32)

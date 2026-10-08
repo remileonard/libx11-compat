@@ -152,6 +152,31 @@ $(WIN_POSIX_LIB): $(WIN_POSIX_OBJS)
 	@echo "  AR      $@"
 	$(Q)rm -f $@ && $(AR) rcs $@ $^
 
+ifneq ($(WIN_GL_CDECL_LIB),)
+# Generated from the pinned Mesa gl.h and the functions opengl32 exports;
+# compiled against the native (__stdcall) declarations, so it does not see
+# compat/win32/include. APIENTRY keeps gl.h from pulling in <windows.h>.
+WIN_GL_CDECL_SRC := $(OUT)/compat/win32/gl-cdecl.c
+WIN_GL_CDECL_OBJ := $(OUT)/compat/win32/gl-cdecl.o
+$(WIN_GL_CDECL_SRC): scripts/gen-gl-cdecl.py $(GL_HDR_CACHE)/GL/gl.h
+	@mkdir -p $(dir $@)
+	@echo "  GEN     $@"
+	$(Q)$(NM) $$($(CC) -print-file-name=libopengl32.a) > $@.nm
+	$(Q)$(PYTHON) -I scripts/gen-gl-cdecl.py $(GL_HDR_CACHE)/GL/gl.h $@.nm > $@
+	$(Q)rm -f $@.nm
+$(WIN_GL_CDECL_OBJ): $(WIN_GL_CDECL_SRC)
+	@echo "  CC      $<"
+	$(Q)$(CC) -O2 -c -I$(GL_HDR_CACHE) -DAPIENTRY=__stdcall $< -o $@
+$(WIN_GL_CDECL_LIB): $(WIN_GL_CDECL_OBJ)
+	@echo "  AR      $@"
+	$(Q)rm -f $@ && $(AR) rcs $@ $^
+endif
+
+$(WIN_BINMODE_OBJ): compat/win32/binmode.c
+	@mkdir -p $(dir $@)
+	@echo "  CC      $<"
+	$(Q)$(CC) -c $< -o $@
+
 # Every first-party object needs SDL3/pixman headers from the sysroot. The
 # compat-library objects (mk/xcompat-libs.mk, ...) all depend on the SDL
 # backend stamp, so hang them off the sysroot through it.
