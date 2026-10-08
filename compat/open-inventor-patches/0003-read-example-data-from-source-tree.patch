@@ -3,18 +3,23 @@ Read example data from the source tree
 The Mentor and Toolmaker examples open their .iv models and .rgb textures
 from a hard-coded /usr/share/src/Inventor/examples/data, which no install
 creates. Spell that prefix as an IVEXAMPLESDATADIR macro, defined by
-apps/examples/CMakeLists.txt as the source tree's apps/examples/data, so the
-examples find their data in the build tree. Generated mechanically:
+apps/examples/CMakeLists.txt as the source tree's apps/examples/data (or the
+INVENTOR_EXAMPLES_DATADIR cache variable), so the examples find their data in
+the build tree. Generated mechanically:
   sed 's|/usr/share/src/Inventor/examples/data|" IVEXAMPLESDATADIR "|g'
 
 diff --git a/apps/examples/CMakeLists.txt b/apps/examples/CMakeLists.txt
 index c01146c..42ed2eb 100644
 --- a/apps/examples/CMakeLists.txt
 +++ b/apps/examples/CMakeLists.txt
-@@ -1,3 +1,7 @@
+@@ -1,3 +1,11 @@
 +# Example data (.iv models, .rgb textures) is read from the source tree, not
-+# from a fixed install location.
-+add_compile_definitions(IVEXAMPLESDATADIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
++# from a fixed install location. INVENTOR_EXAMPLES_DATADIR overrides it (the
++# Windows build uses a relative "data", shipped next to the examples).
++if(NOT DEFINED INVENTOR_EXAMPLES_DATADIR)
++    set(INVENTOR_EXAMPLES_DATADIR "${CMAKE_CURRENT_SOURCE_DIR}/data")
++endif()
++add_compile_definitions(IVEXAMPLESDATADIR="${INVENTOR_EXAMPLES_DATADIR}")
 +
  macro(ADD_EXAMPLE APP)
      add_executable(${APP} ${ARGN})

@@ -131,7 +131,9 @@ endif
 # is libXm.dll (mk/windows-motif.mk). FreeType and libjpeg are cross-built
 # into the Windows sysroot (mk/windows-deps.mk), iconv comes from the POSIX
 # shims. The build runs its own ppp tool, so CMake runs it through Wine
-# (scripts/wine-run.sh).
+# (scripts/wine-run.sh). Data paths are relative to the program's directory
+# (install prefix ".", example data in "data"), so the open-inventor-dist
+# zip runs from wherever it is unpacked.
 ifeq ($(GLX)/$(UNAME_S),1/Windows)
 OI_PLATFORM := windows
 OI_GLU_BUILT :=
@@ -162,7 +164,8 @@ OI_CACHE_INPUTS := -DLIBX11_COMPAT_WINDOWS=ON \
 OI_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(abspath $(WIN_CMAKE_TOOLCHAIN)) \
     -DCMAKE_CROSSCOMPILING_EMULATOR=$(abspath scripts/wine-run.sh) \
     "-DCMAKE_C_FLAGS=$(OI_WIN_CFLAGS)" "-DCMAKE_CXX_FLAGS=$(OI_WIN_CFLAGS)" \
-    -DINVENTOR_DEMOS=OFF
+    -DINVENTOR_DEMOS=OFF \
+    -DCMAKE_INSTALL_PREFIX=. -DINVENTOR_EXAMPLES_DATADIR=data
 endif
 
 ifdef OI_PLATFORM
@@ -320,7 +323,9 @@ OI_CHECK_REGION := 30,5,340,340
 
 # Link audit, per platform. Every X11/Motif/GL library a binary loads must come
 # from this tree; Linux resolves with ldd, macOS reads otool -L install names
-# (@rpath/ entries resolve through the build-tree rpaths).
+# (@rpath/ entries resolve through the build-tree rpaths). Windows has its own
+# check below.
+ifneq ($(OI_PLATFORM),windows)
 ifeq ($(OI_PLATFORM),linux)
 OI_XT_REQUIRED := libXm.so.5 libXt-compat libX11-compat libXi-compat \
     libOpenGL.so.0 libGLU.so.1
@@ -376,6 +381,71 @@ check-open-inventor:
 	    $(PYTHON) scripts/assert-image-content.py \
 	        $(OUT)/open-inventor-$$ex.png 0.10 --region $(OI_CHECK_REGION); \
 	done
+endif
+
+ifeq ($(OI_PLATFORM),windows)
+# Distribution: the Mentor examples with every DLL they load, the example
+# data and the fonts (copied, with their licenses), laid out so the relative
+# paths compiled in (data, ./share/inventor/fonts) resolve from the folder.
+OI_DIST_NAME := open-inventor-$(notdir $(OUT))
+OI_DIST_DIR := $(OUT)/dist/$(OI_DIST_NAME)
+OI_DIST_ZIP := $(OUT)/dist/$(OI_DIST_NAME).zip
+OI_DIST_DLLS := $(OI_COMPAT_LIBS) $(MOTIF_WIN_LIBMRM) $(LIBXPM_TARGET) \
+    $(XMU_COMPAT_TARGET) $(XINERAMA_COMPAT_TARGET) $(XFT_COMPAT_TARGET) \
+    $(OI_BUILD_DIR)/lib/libInventor.dll $(OI_BUILD_DIR)/libSoXt/libInventorXt.dll \
+    $(WIN_SYSROOT)/bin/SDL3.dll $(WIN_SYSROOT)/bin/SDL3_ttf.dll
+OI_DIST_RUNTIME := libwinpthread-1.dll $(WIN_LIBGCC_DLL) libstdc++-6.dll
+
+.PHONY: open-inventor-dist
+## Zip the Windows Open Inventor examples with their DLLs, data and fonts
+open-inventor-dist: $(OI_DIST_ZIP)
+
+$(OI_DIST_ZIP): $(OI_BUILD_STAMP) $(OI_FONT_STAMP) \
+    scripts/windows-open-inventor-readme.txt
+	@echo "  DIST    $@"
+	$(Q)rm -rf $(OI_DIST_DIR) && mkdir -p $(OI_DIST_DIR)/share/inventor/fonts
+	$(Q)cp $(OI_DIST_DLLS) $(OI_BUILD_DIR)/apps/examples/Mentor/CXX/*.exe \
+	    $(OI_DIST_DIR)/
+	$(Q)for dll in $(OI_DIST_RUNTIME); do \
+	    path=$$($(CXX) -print-file-name=$$dll); \
+	    [ -f "$$path" ] || { echo "  FAIL    $$dll not found by $(CXX)" >&2; exit 1; }; \
+	    cp "$$path" $(OI_DIST_DIR)/; \
+	done
+	$(Q)cp -R $(OI_SRC_DIR)/apps/examples/data $(OI_DIST_DIR)/data
+	$(Q)for font in $(OI_FONT_DIR)/*; do \
+	    cp -L "$$font" $(OI_DIST_DIR)/share/inventor/fonts/; \
+	    file=$$(readlink -f "$$font"); \
+	    pkg=$$(dpkg -S "$$file" 2>/dev/null | cut -d: -f1); \
+	    [ -z "$$pkg" ] || [ ! -f /usr/share/doc/$$pkg/copyright ] || \
+	        cp /usr/share/doc/$$pkg/copyright \
+	            $(OI_DIST_DIR)/share/inventor/fonts/LICENSE-$$pkg.txt; \
+	done
+	$(Q)cp scripts/windows-open-inventor-readme.txt $(OI_DIST_DIR)/README.txt
+	$(Q)rm -f $@ && cd $(dir $@) && zip -qr $(notdir $@) $(OI_DIST_NAME)
+
+OI_WINE_ARCH := $(if $(filter i686,$(WINDOWS_ARCH)),win32,win64)
+
+## Audit the Windows dist's DLL imports and render Mentor examples on screen
+## under Wine (Xvfb)
+check-open-inventor: $(OI_DIST_ZIP)
+	$(Q)set -e; cd $(OI_DIST_DIR); \
+	for bin in *.exe *.dll; do \
+	    for dll in $$($(MINGW_TRIPLE)-objdump -p "$$bin" | \
+	        sed -n 's/^[[:space:]]*DLL Name: //p' | grep -Ei '^(lib|SDL)'); do \
+	        [ -f "$$dll" ] || { \
+	            echo "  FAIL    $$bin imports $$dll, which the dist lacks" >&2; \
+	            exit 1; }; \
+	    done; \
+	done
+	@echo "  CHECK   open-inventor dist: every lib*/SDL* import is shipped"
+	$(Q)set -e; for ex in $(OI_CHECK_EXAMPLES); do \
+	    echo "  CHECK   open-inventor render $$ex (Wine, on screen)"; \
+	    WINE_RUN_ARCH=$(OI_WINE_ARCH) scripts/wine-screenshot.sh \
+	        $(OI_DIST_DIR) $$ex.exe $(OUT)/open-inventor-$$ex.bmp 20; \
+	    $(PYTHON) scripts/assert-image-content.py \
+	        $(OUT)/open-inventor-$$ex.bmp 0.10 --region $(OI_CHECK_REGION); \
+	done
+endif
 
 else
 open-inventor open-inventor-fetch open-inventor-examples:
