@@ -443,6 +443,7 @@ $(OI_DIST_ZIP): $(OI_BUILD_STAMP) $(OI_FONT_STAMP) \
 	        cp /usr/share/doc/$$pkg/copyright \
 	            $(OI_DIST_DIR)/share/inventor/fonts/LICENSE-$$pkg.txt; \
 	done
+	$(Q)$(call win_copy_dist_fonts,$(OI_DIST_DIR))
 	$(Q)$(MINGW_TRIPLE)-strip --strip-debug $(OI_DIST_DIR)/*.exe $(OI_DIST_DIR)/*.dll
 	$(Q)cp scripts/windows-open-inventor-readme.txt $(OI_DIST_DIR)/README.txt
 	$(Q)rm -f $@ && cd $(dir $@) && zip -qr $(notdir $@) $(OI_DIST_NAME)

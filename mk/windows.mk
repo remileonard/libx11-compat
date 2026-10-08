@@ -95,4 +95,29 @@ WIN_GL_CDECL_LIB := $(if $(filter i686,$(WINDOWS_ARCH)),$(OUT)/libopengl32-cdecl
 # prefix (scripts/wine-run.sh creates it on first use).
 WIN_WINEPREFIX := $(abspath build)/wineprefix$(if $(filter i686,$(WINDOWS_ARCH)),32)
 
+# TrueType fonts shipped in a dist's fonts/ folder, which src/font.c probes
+# first (relative to the working directory) for the core "fixed"/sans/serif
+# fonts, before C:\Windows\Fonts. Without them a Windows install lacking
+# those system fonts leaves Motif with no font ("Cannot load font").
+WIN_DIST_FONT_DIRS := /usr/share/fonts/truetype/liberation \
+    /usr/share/fonts/truetype/dejavu
+WIN_DIST_FONTS := LiberationMono-Regular.ttf LiberationMono-Bold.ttf \
+    LiberationSans-Regular.ttf LiberationSans-Bold.ttf \
+    LiberationSerif-Regular.ttf LiberationSerif-Bold.ttf \
+    DejaVuSansMono.ttf DejaVuSans.ttf DejaVuSans-Bold.ttf DejaVuSerif.ttf
+# $(call win_copy_dist_fonts,<dist dir>): copy WIN_DIST_FONTS into <dist>/fonts
+# with the copyright file of the package that installed each.
+define win_copy_dist_fonts
+mkdir -p $(1)/fonts && for font in $(WIN_DIST_FONTS); do \
+    path=; for dir in $(WIN_DIST_FONT_DIRS); do \
+        [ -f "$$dir/$$font" ] && path="$$dir/$$font" && break; \
+    done; \
+    [ -n "$$path" ] || { echo "  FAIL    font $$font not found (install fonts-liberation and fonts-dejavu-core)" >&2; exit 1; }; \
+    cp -L "$$path" $(1)/fonts/; \
+    pkg=$$(dpkg -S "$$(readlink -f "$$path")" 2>/dev/null | cut -d: -f1); \
+    [ -z "$$pkg" ] || [ ! -f /usr/share/doc/$$pkg/copyright ] || \
+        cp /usr/share/doc/$$pkg/copyright $(1)/fonts/LICENSE-$$pkg.txt; \
+done
+endef
+
 endif

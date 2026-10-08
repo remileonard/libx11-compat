@@ -43,7 +43,10 @@ These are 32-bit programs on purpose: the original sources keep pointers in
 UNIX systems the code was written for.
 
 Fonts: Liberation and DejaVu, under their own licenses
-(share\inventor\fonts\LICENSE-*).
+(fonts\LICENSE-*, share\inventor\fonts\LICENSE-*). fonts\ holds the X core
+fonts (Motif labels, menus, "fixed"); it is looked up next to the .exe, then
+C:\Windows\Fonts. Without it Motif reports "FONTLIST_DEFAULT_TAG_STRING ...
+Cannot load font".
 
 Build from source (on Linux, with the 32-bit MinGW-w64 cross compiler):
   make WINDOWS=1 WINDOWS_ARCH=i686 open-inventor-dist

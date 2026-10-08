@@ -111,7 +111,12 @@ static void finishTextDamage(Display *display,
  */
 static const char *DEFAULT_FONT_SEARCH_PATHS[] = {
     "fonts",
-#if defined(__APPLE__)
+#if defined(_WIN32)
+    /* The system fonts. /usr/share/fonts would resolve on the current drive
+     * (and, under Wine, to the Linux host's fonts, which hides a missing
+     * Windows font). */
+    "C:/Windows/Fonts",
+#elif defined(__APPLE__)
     "/System/Library/Fonts",
     "/System/Library/Fonts/Supplemental",
     "/Library/Fonts",
@@ -145,6 +150,28 @@ static Bool checkFontPath(const char *path)
     while ((err = stat(path, &s)) == -1 && errno == EAGAIN)
         ;
     return err == 0 && S_ISDIR(s.st_mode);
+}
+
+/* A relative path ("fonts", "fonts/LiberationMono-Regular.ttf") resolves
+ * against the working directory. Windows programs are often started from
+ * Explorer or a shortcut with some other working directory, so there a
+ * relative path missing from it falls back to the executable's folder, where
+ * the Windows dists ship fonts/. Returns path itself or a static buffer.
+ */
+static const char *resolveBundledFontPath(const char *path)
+{
+#if defined(_WIN32)
+    static char resolved[PATH_MAX];
+    struct stat s;
+    if (!path || path[0] == '/' || path[0] == '\\' || strchr(path, ':') ||
+        stat(path, &s) == 0)
+        return path;
+    const char *base = SDL_GetBasePath();
+    if (base && (size_t) snprintf(resolved, sizeof(resolved), "%s%s", base,
+                                  path) < sizeof(resolved))
+        return resolved;
+#endif
+    return path;
 }
 
 static char *getFontXLFDName(TTF_Font *font)
@@ -340,7 +367,7 @@ Bool initFontStorage()
         return False;
 
     for (size_t i = 0; i < ARRAY_LENGTH(DEFAULT_FONT_SEARCH_PATHS); i++) {
-        const char *path = DEFAULT_FONT_SEARCH_PATHS[i];
+        const char *path = resolveBundledFontPath(DEFAULT_FONT_SEARCH_PATHS[i]);
         if (checkFontPath(path)) {
             fontDirectory = opendir(path);
             if (!fontDirectory)
@@ -482,7 +509,12 @@ static Bool isFontAlias(const char *name)
  * the cache so subsequent XLoadFont calls hit the fast path.
  */
 static const char *MONOSPACE_PROBE_PATHS[] = {
-#if defined(__APPLE__)
+#if defined(_WIN32)
+    /* Shipped next to the program (the Windows zips), then the system's. */
+    "fonts/LiberationMono-Regular.ttf", "fonts/DejaVuSansMono.ttf",
+    "C:/Windows/Fonts/cour.ttf",        "C:/Windows/Fonts/consola.ttf",
+    "C:/Windows/Fonts/lucon.ttf",
+#elif defined(__APPLE__)
     "/System/Library/Fonts/Menlo.ttc",
     "/System/Library/Fonts/Monaco.ttf",
     "/System/Library/Fonts/Courier.dfont",
@@ -496,7 +528,11 @@ static const char *MONOSPACE_PROBE_PATHS[] = {
 };
 
 static const char *SANS_PROBE_PATHS[] = {
-#if defined(__APPLE__)
+#if defined(_WIN32)
+    "fonts/LiberationSans-Regular.ttf", "fonts/DejaVuSans.ttf",
+    "C:/Windows/Fonts/arial.ttf",       "C:/Windows/Fonts/segoeui.ttf",
+    "C:/Windows/Fonts/tahoma.ttf",
+#elif defined(__APPLE__)
     "/System/Library/Fonts/Helvetica.ttc",
     "/System/Library/Fonts/LucidaGrande.ttc",
     "/System/Library/Fonts/Supplemental/Arial.ttf",
@@ -518,7 +554,11 @@ static const char *SANS_PROBE_PATHS[] = {
 };
 
 static const char *SANS_BOLD_PROBE_PATHS[] = {
-#if defined(__APPLE__)
+#if defined(_WIN32)
+    "fonts/LiberationSans-Bold.ttf", "fonts/DejaVuSans-Bold.ttf",
+    "C:/Windows/Fonts/arialbd.ttf",  "C:/Windows/Fonts/segoeuib.ttf",
+    "C:/Windows/Fonts/tahomabd.ttf",
+#elif defined(__APPLE__)
     "/System/Library/Fonts/Helvetica.ttc",
     "/System/Library/Fonts/LucidaGrande.ttc",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
@@ -536,7 +576,12 @@ static const char *SANS_BOLD_PROBE_PATHS[] = {
 };
 
 static const char *SERIF_PROBE_PATHS[] = {
-#if defined(__APPLE__)
+#if defined(_WIN32)
+    "fonts/LiberationSerif-Regular.ttf",
+    "fonts/DejaVuSerif.ttf",
+    "C:/Windows/Fonts/times.ttf",
+    "C:/Windows/Fonts/georgia.ttf",
+#elif defined(__APPLE__)
     "/System/Library/Fonts/Times.ttc",
     "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
 #else
@@ -1180,6 +1225,7 @@ static Bool loadFixedBitmapFont(void)
 
 static FontCacheEntry *adoptProbePath(const char *path)
 {
+    path = resolveBundledFontPath(path);
     for (size_t i = 0; i < fontCache->length; i++) {
         FontCacheEntry *entry = fontCache->array[i];
         if (!strcmp(entry->filePath, path))
@@ -1894,8 +1940,9 @@ int XSetFontPath(Display *display, char **directories, int ndirs)
         directories = (char **) DEFAULT_FONT_SEARCH_PATHS;
     }
     for (i = 0; i < (size_t) ndirs; i++) {
-        if (checkFontPath(directories[i])) {
-            path = strdup(directories[i]);
+        const char *dir = resolveBundledFontPath(directories[i]);
+        if (checkFontPath(dir)) {
+            path = strdup(dir);
             if (!path) {
                 handleOutOfMemory(0, display, 0, 0);
             } else {
@@ -2936,7 +2983,7 @@ static Bool renderFixedBitmapText(Drawable drawable,
                         col++;
                     } while (col < FIXED_BITMAP_WIDTH &&
                              (bits & (0x80 >> col)));
-                    rects[rectCount++] = (SDL_Rect) {
+                    rects[rectCount++] = (SDL_Rect){
                         charX + runStart * scale, bounds.y + row * scale,
                         (col - runStart) * scale, scale};
                     if (rectCount == (int) ARRAY_LENGTH(rects))

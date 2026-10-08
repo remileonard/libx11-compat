@@ -203,6 +203,7 @@ $(WIN_DIST_ZIP): $(TARGET) $(EXAMPLE_BINS) $(X11PERF_BIN) $(WIN_DEPS_STAMP) \
 	    [ -f "$$path" ] || { echo "  FAIL    $$dll not found by $(CC)" >&2; exit 1; }; \
 	    cp "$$path" $(WIN_DIST_DIR)/; \
 	done
+	$(Q)$(call win_copy_dist_fonts,$(WIN_DIST_DIR))
 	$(Q)cp scripts/windows-dist-readme.txt $(WIN_DIST_DIR)/README.txt
 	$(Q)rm -f $@ && cd $(dir $@) && zip -qr $(notdir $@) $(notdir $(WIN_DIST_DIR))
 
