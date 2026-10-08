@@ -35,6 +35,9 @@ all: $(TARGET)
 # that only libXft-compat consumes). See scripts/gen-export-list.sh.
 X11_EXPORT_MANIFESTS := tests/api-symbols.txt tests/shim-symbols.txt \
                         tests/private-symbols.txt tests/whitebox-symbols.txt
+ifeq ($(WINDOWS),1)
+X11_EXPORT_MANIFESTS += tests/win32-path-symbols.txt
+endif
 
 # GLX (and the export FORMAT) toggle the exported surface, so a GLX=0->1 flip
 # without make clean must not reuse a map that hid glX* as local. That identity

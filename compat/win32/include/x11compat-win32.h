@@ -81,4 +81,84 @@ int x11compatRenameReplace(const char *from, const char *to);
 }
 #endif
 
+/*
+ * POSIX path namespace (compat/win32/paths.c). UNIX code, Motif's
+ * XmFileSelectionBox first, assumes an absolute path starts with '/' and uses
+ * '/' as the only separator. So the file calls below see Windows drives the
+ * way MSYS2 and Cygwin show them:
+ *
+ *   /c/Users/me/model.iv  <->  C:\Users\me\model.iv
+ *   /                     ->   a directory listing the drives (c, d, ...)
+ *
+ * getcwd() returns that form, and every call taking a path accepts it as
+ * well as a native one ("C:\x", "C:/x", relative), so a path can go from
+ * Motif to fopen() and back. A native path behind a directory prefix, as
+ * Motif or Open Inventor build it ("/c/dir/C:\x\model.iv", "./C:/x"),
+ * resolves to the native path: ':' cannot appear in a Windows file name.
+ *
+ * The system headers come first so their prototypes keep their names, and
+ * libstdc++'s <cstdio>, which #undefs fopen and friends, cannot drop the
+ * macros later. open, remove and rename are C only: C++ code names methods
+ * after them (SoGLCacheList::open, list.remove()).
+ */
+#ifdef __cplusplus
+#include <cstdio>
+#include <cstdlib>
+#endif
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <io.h>
+#include <direct.h>
+#include <dirent.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+FILE *x11compatFopen(const char *path, const char *mode);
+FILE *x11compatFreopen(const char *path, const char *mode, FILE *stream);
+int x11compatOpen(const char *path, int flags, ...);
+int x11compatStat(const char *path, struct stat *buf);
+int x11compatAccess(const char *path, int mode);
+int x11compatChdir(const char *path);
+char *x11compatGetcwd(char *buf, size_t size);
+int x11compatUnlink(const char *path);
+int x11compatRemove(const char *path);
+int x11compatRename(const char *from, const char *to);
+int x11compatRmdir(const char *path);
+DIR *x11compatOpendir(const char *path);
+struct dirent *x11compatReaddir(DIR *dir);
+int x11compatClosedir(DIR *dir);
+void x11compatRewinddir(DIR *dir);
+/* Native path -> POSIX form, in place (same length): "C:\x" -> "/c/x".
+ * For Motif, which takes paths typed by the user; NULL is a no-op. */
+void x11compatPosixifyPath(char *path);
+
+#ifdef __cplusplus
+}
+namespace std {
+using ::x11compatFopen;
+using ::x11compatFreopen;
+} // namespace std
+#endif
+
+#define fopen(path, mode) x11compatFopen(path, mode)
+#define freopen(path, mode, stream) x11compatFreopen(path, mode, stream)
+#define stat(path, buf) x11compatStat(path, buf)
+#define access(path, mode) x11compatAccess(path, mode)
+#define chdir(path) x11compatChdir(path)
+#define getcwd(buf, size) x11compatGetcwd(buf, size)
+#define unlink(path) x11compatUnlink(path)
+#define rmdir(path) x11compatRmdir(path)
+#define opendir(path) x11compatOpendir(path)
+#define readdir(dir) x11compatReaddir(dir)
+#define closedir(dir) x11compatClosedir(dir)
+#define rewinddir(dir) x11compatRewinddir(dir)
+#ifndef __cplusplus
+#define open(...) x11compatOpen(__VA_ARGS__)
+#define remove(path) x11compatRemove(path)
+#define rename(from, to) x11compatRename(from, to)
+#endif
+
 #endif /* LIBX11_COMPAT_WIN32_X11COMPAT_H */

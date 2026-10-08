@@ -146,8 +146,10 @@ windows-deps: $(WIN_DEPS_STAMP)
 # The POSIX shims (poll, dlfcn, iconv, regex, sigaction, ...) and the 32-bit
 # GLU callback adapter as a static archive for the
 # toolkit DLLs; the core links the same objects directly.
-WIN_POSIX_OBJS := $(addprefix $(OUT)/compat/win32/,dlfcn.o glu-callbacks.o iconv.o poll.o \
-    posix.o regex.o signal.o)
+# The path wrappers (paths.o) are not in it: libX11-compat.dll exports them
+# (tests/win32-path-symbols.txt), so every module shares one implementation.
+WIN_POSIX_OBJS := $(addprefix $(OUT)/compat/win32/,dlfcn.o glu-callbacks.o \
+    iconv.o poll.o posix.o regex.o signal.o)
 $(WIN_POSIX_LIB): $(WIN_POSIX_OBJS)
 	@echo "  AR      $@"
 	$(Q)rm -f $@ && $(AR) rcs $@ $^

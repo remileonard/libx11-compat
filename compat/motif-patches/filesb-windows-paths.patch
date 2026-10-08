@@ -1,0 +1,60 @@
+FileSB, Xmos: Windows paths in the file selection box.
+
+libx11-compat gives the Windows build a POSIX path namespace ("/c/Users"
+for C:\Users, see compat/win32/include/x11compat-win32.h): getcwd()
+returns it and the file calls accept it, so the UNIX path code here works
+unchanged. Two things still reach it in native form:
+
+- a path the user types into the filter or the app sets as XmNdirectory
+  ("C:\data\*.iv"): convert it to the POSIX form before qualifying it;
+- $PWD, which GetCurrentDir prefers over getcwd() when stat() says both
+  are the same directory. Windows has no inode numbers (st_ino is 0), so
+  that check always passes, and the shell that set PWD (MSYS2, or Wine's
+  UNIX host) names the directory its own way. Ignore PWD on Windows.
+
+diff --git a/lib/Xm/FileSB.c b/lib/Xm/FileSB.c
+index 8ab73b57..31f4aa8f 100644
+--- a/lib/Xm/FileSB.c
++++ b/lib/Xm/FileSB.c
+@@ -1877,6 +1877,14 @@ QualifySearchDataProc(
+         dirString = XmStringUngenerate(searchData->dir, NULL, XmUTF8_TEXT, XmUTF8_TEXT);
+     if (!XmStringEmpty(searchData->pattern))
+         patternString = XmStringUngenerate(searchData->pattern, NULL, XmUTF8_TEXT, XmUTF8_TEXT);
++#ifdef _WIN32
++    /* A Windows path typed into the filter ("C:\\data\\*.iv") in the
++     * POSIX form the code below expects ("/c/data/*.iv"); see
++     * compat/win32/include/x11compat-win32.h in libx11-compat. */
++    x11compatPosixifyPath(maskString);
++    x11compatPosixifyPath(dirString);
++    x11compatPosixifyPath(patternString);
++#endif
+ 
+     if(    !maskString
+         || (dirString  &&  patternString)
+@@ -1884,6 +1892,9 @@ QualifySearchDataProc(
+     {
+         if (!dirString && !XmStringEmpty(FS_Directory(fs)))
+             dirString = XmStringUngenerate(FS_Directory(fs), NULL, XmUTF8_TEXT, XmUTF8_TEXT);
++#ifdef _WIN32
++        x11compatPosixifyPath(dirString);
++#endif
+ 
+         if(    !patternString    )
+         {
+diff --git a/lib/Xm/Xmos.c b/lib/Xm/Xmos.c
+index 8d2830fe..5ef082b0 100644
+--- a/lib/Xm/Xmos.c
++++ b/lib/Xm/Xmos.c
+@@ -1186,6 +1186,12 @@ GetCurrentDir(String 	buf)
+     String pwd = getenv ("PWD");
+     struct stat stat1, stat2;
+ 
++#ifdef _WIN32
++    /* No inode numbers to check $PWD against (st_ino is always 0), and the
++     * shell that set it may name the directory another way (an MSYS2 or
++     * Wine host path): trust getcwd() alone. */
++    pwd = NULL;
++#endif
+     if (pwd
+ 	&& stat (pwd, &stat1) == 0
+ 	&& stat (".", &stat2) == 0

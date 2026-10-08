@@ -1,6 +1,6 @@
 /* POSIX libc calls MinGW-w64 lacks; see compat/win32/include/x11compat-win32.h.
  */
-#include <direct.h>
+#include <ctype.h>
 #include <errno.h>
 #include <pwd.h>
 #include <stdio.h>
@@ -21,15 +21,6 @@ int unsetenv(const char *name)
     return _putenv_s(name, "") == 0 ? 0 : -1;
 }
 
-int x11compatRenameReplace(const char *from, const char *to)
-{
-    if (MoveFileExA(from, to,
-                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED))
-        return 0;
-    errno = EACCES;
-    return -1;
-}
-
 /* The single user behind <pwd.h>: the account name and profile directory. */
 static struct passwd *currentUser(void)
 {
@@ -43,6 +34,16 @@ static struct passwd *currentUser(void)
     if (!env)
         env = getenv("USERPROFILE");
     snprintf(dir, sizeof(dir), "%s", env ? env : "C:\\");
+    /* In the POSIX path form ("/c/Users/me"), like getcwd(); see
+     * compat/win32/paths.c. */
+    if (isalpha((unsigned char) dir[0]) && dir[1] == ':') {
+        dir[1] = (char) tolower((unsigned char) dir[0]);
+        dir[0] = '/';
+    }
+    for (char *p = dir; *p; p++) {
+        if (*p == '\\')
+            *p = '/';
+    }
     user.pw_name = name;
     user.pw_passwd = "";
     user.pw_uid = getuid();
@@ -144,9 +145,4 @@ void bcopy(const void *src, void *dst, size_t n)
 void bzero(void *s, size_t n)
 {
     memset(s, 0, n);
-}
-
-int x11compatMkdir(const char *path)
-{
-    return _mkdir(path);
 }

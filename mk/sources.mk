@@ -39,8 +39,8 @@ UPSTREAM_OBJS := $(patsubst $(OUT)/upstream/src/%.c,$(OBJROOT)/upstream/src/%.o,
 ifeq ($(WINDOWS),1)
 SRCS += compat/win32/dlfcn.c compat/win32/event-pipe.c \
     compat/win32/glu-callbacks.c compat/win32/iconv.c \
-    compat/win32/poll.c compat/win32/posix.c compat/win32/regex.c \
-    compat/win32/signal.c
+    compat/win32/paths.c compat/win32/poll.c compat/win32/posix.c \
+    compat/win32/regex.c compat/win32/signal.c
 endif
 
 OBJS := $(patsubst %.c,$(OBJROOT)/%.o,$(SRCS)) $(UPSTREAM_OBJS)
