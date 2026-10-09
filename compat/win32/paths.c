@@ -14,7 +14,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <wctype.h>
 #include <windows.h>
+
+#include "paths-internal.h"
 
 /* x11compat-win32.h gives fopen, stat, ... the assembler names of the
  * wrappers below, so these reach the C runtime's own functions under other
@@ -39,6 +42,74 @@ void crtRewinddir(DIR *dir) CRT(rewinddir);
 
 /* The wrappers, under their own names; the declarations in
  * x11compat-win32.h bind the standard names to these symbols. */
+static int isSeparatorW(wchar_t c)
+{
+    return c == L'/' || c == L'\\';
+}
+
+static int isAsciiLetterW(wchar_t c)
+{
+    return (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z');
+}
+
+static int isDriveSpecW(const wchar_t *p)
+{
+    return isAsciiLetterW(p[0]) && p[1] == L':' &&
+           (isSeparatorW(p[2]) || p[2] == L'\0');
+}
+
+/* x11compatToNativePath for wide paths (std::filesystem, the W APIs). */
+const wchar_t *x11compatToNativePathW(const wchar_t *path, wchar_t *out)
+{
+    size_t len;
+
+    if (!path)
+        return NULL;
+    for (const wchar_t *p = path + 1; p[-1] && *p; p++) {
+        if (isSeparatorW(p[-1]) && isDriveSpecW(p)) {
+            path = p;
+            break;
+        }
+    }
+    if (path[0] == L'/' && isAsciiLetterW(path[1]) &&
+        (isSeparatorW(path[2]) || path[2] == L'\0')) {
+        const wchar_t *rest = path + 2;
+        while (isSeparatorW(*rest))
+            rest++;
+        len = wcslen(rest);
+        if (len + 4 > PATH_BUFFER_SIZE) {
+            errno = ENAMETOOLONG;
+            return NULL;
+        }
+        out[0] = (wchar_t) towupper(path[1]);
+        out[1] = L':';
+        out[2] = L'/';
+        memcpy(out + 3, rest, (len + 1) * sizeof(wchar_t));
+        len += 3;
+    } else {
+        len = wcslen(path);
+        if (len + 1 > PATH_BUFFER_SIZE) {
+            errno = ENAMETOOLONG;
+            return NULL;
+        }
+        memcpy(out, path, (len + 1) * sizeof(wchar_t));
+    }
+    while (len > 1 && isSeparatorW(out[len - 1]) &&
+           !(len == 3 && out[1] == L':'))
+        out[--len] = L'\0';
+    return out;
+}
+
+int x11compatNativePaths(void)
+{
+    static int native = -1;
+    if (native < 0) {
+        const char *mode = getenv("X11COMPAT_PATHS");
+        native = mode && strcmp(mode, "native") == 0;
+    }
+    return native;
+}
+
 FILE *x11compatFopen(const char *path, const char *mode);
 FILE *x11compatFreopen(const char *path, const char *mode, FILE *stream);
 int x11compatOpen(const char *path, int flags, ...);
@@ -56,7 +127,6 @@ struct dirent *x11compatReaddir(DIR *dir);
 int x11compatClosedir(DIR *dir);
 void x11compatRewinddir(DIR *dir);
 
-#define PATH_BUFFER_SIZE 4096
 
 static int isSeparator(char c)
 {
@@ -90,15 +160,16 @@ static int isPosixRoot(const char *p)
 /* The native form of path in out[PATH_BUFFER_SIZE]; NULL (ENAMETOOLONG)
  * when it does not fit. Paths with no POSIX drive pass through, but for the
  * trailing separator, which the CRT's stat() rejects on directories.
+ * Shared with imports.c (paths-internal.h).
  */
-static const char *toNative(const char *path, char *out)
+const char *x11compatToNativePath(const char *path, char *out)
 {
     size_t len;
 
     if (!path)
         return NULL;
     /* A drive path behind a prefix: "/c/dir/C:\x" or "./C:/x". */
-    for (const char *p = path + 1; *p; p++) {
+    for (const char *p = path + 1; p[-1] && *p; p++) {
         if (isSeparator(p[-1]) && isDriveSpec(p)) {
             path = p;
             break;
@@ -141,7 +212,7 @@ void x11compatPosixifyPath(char *path)
 FILE *x11compatFopen(const char *path, const char *mode)
 {
     char buf[PATH_BUFFER_SIZE];
-    const char *native = toNative(path, buf);
+    const char *native = x11compatToNativePath(path, buf);
     return native ? crtFopen(native, mode) : NULL;
 }
 
@@ -150,7 +221,7 @@ FILE *x11compatFreopen(const char *path, const char *mode, FILE *stream)
     char buf[PATH_BUFFER_SIZE];
     const char *native = path;
     /* A NULL path changes the stream's mode; pass it through. */
-    if (path && !(native = toNative(path, buf)))
+    if (path && !(native = x11compatToNativePath(path, buf)))
         return NULL;
     return crtFreopen(native, mode, stream);
 }
@@ -158,7 +229,7 @@ FILE *x11compatFreopen(const char *path, const char *mode, FILE *stream)
 int x11compatOpen(const char *path, int flags, ...)
 {
     char buf[PATH_BUFFER_SIZE];
-    const char *native = toNative(path, buf);
+    const char *native = x11compatToNativePath(path, buf);
     int mode = 0;
     if (flags & O_CREAT) {
         va_list args;
@@ -185,7 +256,7 @@ int x11compatStat(const char *path, struct stat *st)
         st->st_nlink = 1;
         return 0;
     }
-    native = toNative(path, buf);
+    native = x11compatToNativePath(path, buf);
     return native ? crtStat(native, st) : -1;
 }
 
@@ -201,7 +272,7 @@ int x11compatAccess(const char *path, int mode)
         }
         return 0;
     }
-    native = toNative(path, buf);
+    native = x11compatToNativePath(path, buf);
     /* The CRT rejects X_OK (1); a file that exists is "executable". */
     return native ? crtAccess(native, mode & ~1) : -1;
 }
@@ -215,11 +286,12 @@ int x11compatChdir(const char *path)
         errno = EACCES;
         return -1;
     }
-    native = toNative(path, buf);
+    native = x11compatToNativePath(path, buf);
     return native ? crtChdir(native) : -1;
 }
 
-/* "C:\x\y" -> "/c/x/y", "\\server\share" -> "//server/share". */
+/* "C:\x\y" -> "/c/x/y", "\\server\share" -> "//server/share"; with
+ * X11COMPAT_PATHS=native, "C:/x/y". */
 char *x11compatGetcwd(char *buf, int size)
 {
     char native[PATH_BUFFER_SIZE];
@@ -227,7 +299,14 @@ char *x11compatGetcwd(char *buf, int size)
 
     if (!crtGetcwd(native, (int) sizeof(native)))
         return NULL;
-    x11compatPosixifyPath(native);
+    if (x11compatNativePaths()) {
+        for (char *p = native; *p; p++) {
+            if (*p == '\\')
+                *p = '/';
+        }
+    } else {
+        x11compatPosixifyPath(native);
+    }
     len = strlen(native);
     if (!buf) {
         /* The POSIX extension: allocate (at least size bytes). */
@@ -249,36 +328,36 @@ char *x11compatGetcwd(char *buf, int size)
 int x11compatUnlink(const char *path)
 {
     char buf[PATH_BUFFER_SIZE];
-    const char *native = toNative(path, buf);
+    const char *native = x11compatToNativePath(path, buf);
     return native ? crtUnlink(native) : -1;
 }
 
 int x11compatRemove(const char *path)
 {
     char buf[PATH_BUFFER_SIZE];
-    const char *native = toNative(path, buf);
+    const char *native = x11compatToNativePath(path, buf);
     return native ? crtRemove(native) : -1;
 }
 
 int x11compatRename(const char *from, const char *to)
 {
     char fromBuf[PATH_BUFFER_SIZE], toBuf[PATH_BUFFER_SIZE];
-    const char *nativeFrom = toNative(from, fromBuf);
-    const char *nativeTo = toNative(to, toBuf);
+    const char *nativeFrom = x11compatToNativePath(from, fromBuf);
+    const char *nativeTo = x11compatToNativePath(to, toBuf);
     return nativeFrom && nativeTo ? crtRename(nativeFrom, nativeTo) : -1;
 }
 
 int x11compatRmdir(const char *path)
 {
     char buf[PATH_BUFFER_SIZE];
-    const char *native = toNative(path, buf);
+    const char *native = x11compatToNativePath(path, buf);
     return native ? crtRmdir(native) : -1;
 }
 
 int x11compatMkdir(const char *path)
 {
     char buf[PATH_BUFFER_SIZE];
-    const char *native = toNative(path, buf);
+    const char *native = x11compatToNativePath(path, buf);
     return native ? crtMkdir(native) : -1;
 }
 
@@ -286,8 +365,8 @@ int x11compatMkdir(const char *path)
 int x11compatRenameReplace(const char *from, const char *to)
 {
     char fromBuf[PATH_BUFFER_SIZE], toBuf[PATH_BUFFER_SIZE];
-    const char *nativeFrom = toNative(from, fromBuf);
-    const char *nativeTo = toNative(to, toBuf);
+    const char *nativeFrom = x11compatToNativePath(from, fromBuf);
+    const char *nativeTo = x11compatToNativePath(to, toBuf);
 
     if (!nativeFrom || !nativeTo)
         return -1;
@@ -338,7 +417,7 @@ DIR *x11compatOpendir(const char *path)
         rootDirs = root;
         return (DIR *) root;
     }
-    native = toNative(path, buf);
+    native = x11compatToNativePath(path, buf);
     return native ? crtOpendir(native) : NULL;
 }
 

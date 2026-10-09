@@ -1,6 +1,7 @@
 /* <dlfcn.h> subset over the Win32 loader; see compat/win32/include/dlfcn.h. */
 #include <dlfcn.h>
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <windows.h>
@@ -16,6 +17,23 @@ static void setError(const char *what, const char *name)
     haveError = 1;
 }
 
+/* Give a module dlopen() just loaded the path translation of
+ * compat/win32/imports.c. This file is also linked into the toolkit DLLs
+ * (libwin32-posix.a), so it finds libX11-compat.dll's function by name. */
+static void patchNewModules(void)
+{
+    static void (*patch)(void);
+    if (!patch) {
+        HMODULE core = GetModuleHandleA("libX11-compat.dll");
+        patch = core ? (void (*)(void))(void *) GetProcAddress(
+                           core, "x11compatPatchImports")
+                     : NULL;
+        if (!patch)
+            return;
+    }
+    patch();
+}
+
 void *dlopen(const char *file, int mode)
 {
     HMODULE module;
@@ -25,7 +43,18 @@ void *dlopen(const char *file, int mode)
         if (!GetModuleHandleExA(0, file, &module))
             module = NULL;
     } else {
+        /* A path in the POSIX form of compat/win32/paths.c: "/c/x" is
+         * "C:/x". */
+        char native[MAX_PATH];
+        if (file[0] == '/' && isalpha((unsigned char) file[1]) &&
+            (file[2] == '/' || file[2] == '\\' || file[2] == '\0') &&
+            snprintf(native, sizeof(native), "%c:%s",
+                     toupper((unsigned char) file[1]),
+                     file[2] ? file + 2 : "/") < (int) sizeof(native))
+            file = native;
         module = LoadLibraryA(file);
+        if (module)
+            patchNewModules();
     }
     if (!module)
         setError("dlopen", file);

@@ -34,9 +34,11 @@ static struct passwd *currentUser(void)
     if (!env)
         env = getenv("USERPROFILE");
     snprintf(dir, sizeof(dir), "%s", env ? env : "C:\\");
-    /* In the POSIX path form ("/c/Users/me"), like getcwd(); see
-     * compat/win32/paths.c. */
-    if (isalpha((unsigned char) dir[0]) && dir[1] == ':') {
+    /* In the POSIX path form ("/c/Users/me"), like getcwd(), unless
+     * X11COMPAT_PATHS=native; see compat/win32/paths.c. */
+    env = getenv("X11COMPAT_PATHS");
+    if (!(env && strcmp(env, "native") == 0) &&
+        isalpha((unsigned char) dir[0]) && dir[1] == ':') {
         dir[1] = (char) tolower((unsigned char) dir[0]);
         dir[0] = '/';
     }

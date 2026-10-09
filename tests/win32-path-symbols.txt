@@ -1,9 +1,10 @@
 # The POSIX path wrappers of the Windows build (compat/win32/paths.c), which
-# compat/win32/include/x11compat-win32.h binds fopen, stat, opendir, ... to
-# in every translation unit, C and C++. libX11-compat exports them so any program or
-# library that links it (the toolkits, the examples, Open Inventor) resolves
-# them from one implementation. Windows only: listed
-# in X11_EXPORT_MANIFESTS when WINDOWS=1 (mk/library.mk).
+# compat/win32/include/x11compat-win32.h binds fopen, stat, opendir, ... to in
+# every translation unit, C and C++, plus x11compatPatchImports
+# (compat/win32/imports.c), which dlopen() looks up by name. libX11-compat
+# exports them so any program or library that links it (the toolkits, the
+# examples, Open Inventor) resolves them from one implementation. Windows
+# only: listed in X11_EXPORT_MANIFESTS when WINDOWS=1 (mk/library.mk).
 x11compatAccess
 x11compatChdir
 x11compatClosedir
@@ -14,6 +15,7 @@ x11compatGetcwd
 x11compatMkdir
 x11compatOpen
 x11compatOpendir
+x11compatPatchImports
 x11compatPosixifyPath
 x11compatReaddir
 x11compatRemove

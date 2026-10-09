@@ -38,7 +38,11 @@ from data\ and share\inventor\ relative to the current directory.
 File names: the programs see Windows paths the UNIX way, as MSYS2 and Cygwin
 show them: C:\Users\me\model.iv is /c/Users/me/model.iv, and / lists the
 drives. That is what the Motif file dialogs display; their filter also takes a
-Windows path (C:\models\*.iv), and so does the command line.
+Windows path (C:\models\*.iv), and so does the command line. Both forms work
+everywhere a program opens a file, C++ streams (std::ifstream,
+std::filesystem) and other DLLs included. Should a program still trip over
+the /c/... form, set X11COMPAT_PATHS=native before starting it: it then sees
+C:/Users/me/... (the Motif file dialogs no longer list the drives then).
 
 Some examples are console programs, need command-line arguments, or need
 overlay planes / color-index visuals, which are not available.
