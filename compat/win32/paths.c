@@ -1,7 +1,7 @@
 /* The POSIX path namespace of the Windows build ("/c/Users" <-> "C:\Users");
  * see compat/win32/include/x11compat-win32.h. Each wrapper translates its
- * path arguments to the native form and calls the CRT function the macros
- * there stand in for.
+ * path arguments to the native form and calls the CRT function it stands
+ * in for.
  */
 #include <ctype.h>
 #include <direct.h>
@@ -16,23 +16,45 @@
 #include <sys/stat.h>
 #include <windows.h>
 
-/* This file implements the macros; it calls the real functions. */
-#undef fopen
-#undef freopen
-#undef open
-#undef stat
-#undef access
-#undef chdir
-#undef getcwd
-#undef unlink
-#undef remove
-#undef rename
-#undef rmdir
-#undef opendir
-#undef readdir
-#undef closedir
-#undef rewinddir
-#undef mkdir
+/* x11compat-win32.h gives fopen, stat, ... the assembler names of the
+ * wrappers below, so these reach the C runtime's own functions under other
+ * C names. */
+#define CRT(name) X11COMPAT_ASM_NAME(name)
+FILE *crtFopen(const char *path, const char *mode) CRT(fopen);
+FILE *crtFreopen(const char *path, const char *mode, FILE *stream) CRT(freopen);
+int crtOpen(const char *path, int flags, ...) CRT(_open);
+int crtStat(const char *path, struct stat *buf) CRT(stat);
+int crtAccess(const char *path, int mode) CRT(_access);
+int crtChdir(const char *path) CRT(_chdir);
+char *crtGetcwd(char *buf, int size) CRT(_getcwd);
+int crtUnlink(const char *path) CRT(_unlink);
+int crtRemove(const char *path) CRT(remove);
+int crtRename(const char *from, const char *to) CRT(rename);
+int crtRmdir(const char *path) CRT(_rmdir);
+int crtMkdir(const char *path) CRT(_mkdir);
+DIR *crtOpendir(const char *path) CRT(opendir);
+struct dirent *crtReaddir(DIR *dir) CRT(readdir);
+int crtClosedir(DIR *dir) CRT(closedir);
+void crtRewinddir(DIR *dir) CRT(rewinddir);
+
+/* The wrappers, under their own names; the declarations in
+ * x11compat-win32.h bind the standard names to these symbols. */
+FILE *x11compatFopen(const char *path, const char *mode);
+FILE *x11compatFreopen(const char *path, const char *mode, FILE *stream);
+int x11compatOpen(const char *path, int flags, ...);
+int x11compatCreat(const char *path, int mode);
+int x11compatStat(const char *path, struct stat *buf);
+int x11compatAccess(const char *path, int mode);
+int x11compatChdir(const char *path);
+char *x11compatGetcwd(char *buf, int size);
+int x11compatUnlink(const char *path);
+int x11compatRemove(const char *path);
+int x11compatRename(const char *from, const char *to);
+int x11compatRmdir(const char *path);
+DIR *x11compatOpendir(const char *path);
+struct dirent *x11compatReaddir(DIR *dir);
+int x11compatClosedir(DIR *dir);
+void x11compatRewinddir(DIR *dir);
 
 #define PATH_BUFFER_SIZE 4096
 
@@ -120,7 +142,7 @@ FILE *x11compatFopen(const char *path, const char *mode)
 {
     char buf[PATH_BUFFER_SIZE];
     const char *native = toNative(path, buf);
-    return native ? fopen(native, mode) : NULL;
+    return native ? crtFopen(native, mode) : NULL;
 }
 
 FILE *x11compatFreopen(const char *path, const char *mode, FILE *stream)
@@ -130,7 +152,7 @@ FILE *x11compatFreopen(const char *path, const char *mode, FILE *stream)
     /* A NULL path changes the stream's mode; pass it through. */
     if (path && !(native = toNative(path, buf)))
         return NULL;
-    return freopen(native, mode, stream);
+    return crtFreopen(native, mode, stream);
 }
 
 int x11compatOpen(const char *path, int flags, ...)
@@ -144,7 +166,12 @@ int x11compatOpen(const char *path, int flags, ...)
         mode = va_arg(args, int);
         va_end(args);
     }
-    return native ? open(native, flags, mode) : -1;
+    return native ? crtOpen(native, flags, mode) : -1;
+}
+
+int x11compatCreat(const char *path, int mode)
+{
+    return x11compatOpen(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
 }
 
 int x11compatStat(const char *path, struct stat *st)
@@ -159,7 +186,7 @@ int x11compatStat(const char *path, struct stat *st)
         return 0;
     }
     native = toNative(path, buf);
-    return native ? stat(native, st) : -1;
+    return native ? crtStat(native, st) : -1;
 }
 
 int x11compatAccess(const char *path, int mode)
@@ -176,7 +203,7 @@ int x11compatAccess(const char *path, int mode)
     }
     native = toNative(path, buf);
     /* The CRT rejects X_OK (1); a file that exists is "executable". */
-    return native ? access(native, mode & ~1) : -1;
+    return native ? crtAccess(native, mode & ~1) : -1;
 }
 
 int x11compatChdir(const char *path)
@@ -189,28 +216,29 @@ int x11compatChdir(const char *path)
         return -1;
     }
     native = toNative(path, buf);
-    return native ? chdir(native) : -1;
+    return native ? crtChdir(native) : -1;
 }
 
 /* "C:\x\y" -> "/c/x/y", "\\server\share" -> "//server/share". */
-char *x11compatGetcwd(char *buf, size_t size)
+char *x11compatGetcwd(char *buf, int size)
 {
     char native[PATH_BUFFER_SIZE];
     size_t len;
 
-    if (!_getcwd(native, sizeof(native)))
+    if (!crtGetcwd(native, (int) sizeof(native)))
         return NULL;
     x11compatPosixifyPath(native);
     len = strlen(native);
     if (!buf) {
-        if (size < len + 1)
-            size = len + 1;
-        buf = malloc(size);
+        /* The POSIX extension: allocate (at least size bytes). */
+        size_t alloc =
+            size > 0 && (size_t) size > len ? (size_t) size : len + 1;
+        buf = malloc(alloc);
         if (!buf) {
             errno = ENOMEM;
             return NULL;
         }
-    } else if (size < len + 1) {
+    } else if (size <= 0 || (size_t) size < len + 1) {
         errno = ERANGE;
         return NULL;
     }
@@ -222,14 +250,14 @@ int x11compatUnlink(const char *path)
 {
     char buf[PATH_BUFFER_SIZE];
     const char *native = toNative(path, buf);
-    return native ? unlink(native) : -1;
+    return native ? crtUnlink(native) : -1;
 }
 
 int x11compatRemove(const char *path)
 {
     char buf[PATH_BUFFER_SIZE];
     const char *native = toNative(path, buf);
-    return native ? remove(native) : -1;
+    return native ? crtRemove(native) : -1;
 }
 
 int x11compatRename(const char *from, const char *to)
@@ -237,21 +265,21 @@ int x11compatRename(const char *from, const char *to)
     char fromBuf[PATH_BUFFER_SIZE], toBuf[PATH_BUFFER_SIZE];
     const char *nativeFrom = toNative(from, fromBuf);
     const char *nativeTo = toNative(to, toBuf);
-    return nativeFrom && nativeTo ? rename(nativeFrom, nativeTo) : -1;
+    return nativeFrom && nativeTo ? crtRename(nativeFrom, nativeTo) : -1;
 }
 
 int x11compatRmdir(const char *path)
 {
     char buf[PATH_BUFFER_SIZE];
     const char *native = toNative(path, buf);
-    return native ? rmdir(native) : -1;
+    return native ? crtRmdir(native) : -1;
 }
 
 int x11compatMkdir(const char *path)
 {
     char buf[PATH_BUFFER_SIZE];
     const char *native = toNative(path, buf);
-    return native ? _mkdir(native) : -1;
+    return native ? crtMkdir(native) : -1;
 }
 
 /* POSIX rename() semantics (replace an existing target); see src/util.h. */
@@ -311,7 +339,7 @@ DIR *x11compatOpendir(const char *path)
         return (DIR *) root;
     }
     native = toNative(path, buf);
-    return native ? opendir(native) : NULL;
+    return native ? crtOpendir(native) : NULL;
 }
 
 struct dirent *x11compatReaddir(DIR *dir)
@@ -319,7 +347,7 @@ struct dirent *x11compatReaddir(DIR *dir)
     RootDir *root = findRootDir(dir);
 
     if (!root)
-        return readdir(dir);
+        return crtReaddir(dir);
     while (root->next < 26) {
         int drive = root->next++;
         if (root->drives & (1u << drive)) {
@@ -337,7 +365,7 @@ void x11compatRewinddir(DIR *dir)
     RootDir *root = findRootDir(dir);
 
     if (!root) {
-        rewinddir(dir);
+        crtRewinddir(dir);
         return;
     }
     root->drives = GetLogicalDrives();
@@ -356,5 +384,5 @@ int x11compatClosedir(DIR *dir)
             return 0;
         }
     }
-    return closedir(dir);
+    return crtClosedir(dir);
 }

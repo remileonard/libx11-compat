@@ -7,6 +7,10 @@
 #ifndef LIBX11_COMPAT_WIN32_X11COMPAT_H
 #define LIBX11_COMPAT_WIN32_X11COMPAT_H
 
+/* MinGW's fortified headers define open() and friends inline, which the
+ * path redirects at the end of this file cannot redeclare. */
+#undef _FORTIFY_SOURCE
+
 /* Have MinGW's <time.h> provide the POSIX reentrant time functions
  * (localtime_r, gmtime_r, ...), as any POSIX libc does. */
 #ifndef _POSIX_THREAD_SAFE_FUNCTIONS
@@ -96,10 +100,13 @@ int x11compatRenameReplace(const char *from, const char *to);
  * Motif or Open Inventor build it ("/c/dir/C:\x\model.iv", "./C:/x"),
  * resolves to the native path: ':' cannot appear in a Windows file name.
  *
- * The system headers come first so their prototypes keep their names, and
- * libstdc++'s <cstdio>, which #undefs fopen and friends, cannot drop the
- * macros later. open, remove and rename are C only: C++ code names methods
- * after them (SoGLCacheList::open, list.remove()).
+ * The functions are redirected at the symbol level, not with macros: each is
+ * redeclared below, after its system header, with the assembler name of its
+ * wrapper (fopen -> x11compatFopen), so every call, in C and C++ alike, and
+ * every function pointer taken to it reaches the wrapper. Members of the same
+ * name (SoGLCacheList::open, std::list::remove, struct stat) are untouched,
+ * which macros could not guarantee. libX11-compat.dll defines the wrappers
+ * and exports them (tests/win32-path-symbols.txt).
  */
 #ifdef __cplusplus
 #include <cstdio>
@@ -111,54 +118,51 @@ int x11compatRenameReplace(const char *from, const char *to);
 #include <io.h>
 #include <direct.h>
 #include <dirent.h>
+/* io.h maps access() to __mingw_access under __USE_MINGW_ACCESS; the
+ * wrapper below handles X_OK itself. */
+#undef access
+
+#define X11COMPAT_STRINGIFY2(x) #x
+#define X11COMPAT_STRINGIFY(x) X11COMPAT_STRINGIFY2(x)
+#define X11COMPAT_ASM_NAME(name)                                              \
+    __asm__(X11COMPAT_STRINGIFY(__USER_LABEL_PREFIX__) #name)
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-FILE *x11compatFopen(const char *path, const char *mode);
-FILE *x11compatFreopen(const char *path, const char *mode, FILE *stream);
-int x11compatOpen(const char *path, int flags, ...);
-int x11compatStat(const char *path, struct stat *buf);
-int x11compatAccess(const char *path, int mode);
-int x11compatChdir(const char *path);
-char *x11compatGetcwd(char *buf, size_t size);
-int x11compatUnlink(const char *path);
-int x11compatRemove(const char *path);
-int x11compatRename(const char *from, const char *to);
-int x11compatRmdir(const char *path);
-DIR *x11compatOpendir(const char *path);
-struct dirent *x11compatReaddir(DIR *dir);
-int x11compatClosedir(DIR *dir);
-void x11compatRewinddir(DIR *dir);
+FILE *__cdecl fopen(const char *__restrict__ path,
+                    const char *__restrict__ mode)
+    X11COMPAT_ASM_NAME(x11compatFopen);
+FILE *__cdecl freopen(const char *__restrict__ path,
+                      const char *__restrict__ mode,
+                      FILE *__restrict__ stream)
+    X11COMPAT_ASM_NAME(x11compatFreopen);
+int __cdecl open(const char *path, int flags, ...)
+    X11COMPAT_ASM_NAME(x11compatOpen);
+int __cdecl creat(const char *path, int mode) X11COMPAT_ASM_NAME(x11compatCreat);
+int __cdecl stat(const char *path, struct stat *buf)
+    X11COMPAT_ASM_NAME(x11compatStat);
+int __cdecl access(const char *path, int mode)
+    X11COMPAT_ASM_NAME(x11compatAccess);
+int __cdecl chdir(const char *path) X11COMPAT_ASM_NAME(x11compatChdir);
+char *__cdecl getcwd(char *buf, int size) X11COMPAT_ASM_NAME(x11compatGetcwd);
+int __cdecl unlink(const char *path) X11COMPAT_ASM_NAME(x11compatUnlink);
+int __cdecl remove(const char *path) X11COMPAT_ASM_NAME(x11compatRemove);
+int __cdecl rename(const char *from, const char *to)
+    X11COMPAT_ASM_NAME(x11compatRename);
+int __cdecl rmdir(const char *path) X11COMPAT_ASM_NAME(x11compatRmdir);
+DIR *__cdecl opendir(const char *path) X11COMPAT_ASM_NAME(x11compatOpendir);
+struct dirent *__cdecl readdir(DIR *dir) X11COMPAT_ASM_NAME(x11compatReaddir);
+int __cdecl closedir(DIR *dir) X11COMPAT_ASM_NAME(x11compatClosedir);
+void __cdecl rewinddir(DIR *dir) X11COMPAT_ASM_NAME(x11compatRewinddir);
+
 /* Native path -> POSIX form, in place (same length): "C:\x" -> "/c/x".
  * For Motif, which takes paths typed by the user; NULL is a no-op. */
 void x11compatPosixifyPath(char *path);
 
 #ifdef __cplusplus
 }
-namespace std {
-using ::x11compatFopen;
-using ::x11compatFreopen;
-} // namespace std
-#endif
-
-#define fopen(path, mode) x11compatFopen(path, mode)
-#define freopen(path, mode, stream) x11compatFreopen(path, mode, stream)
-#define stat(path, buf) x11compatStat(path, buf)
-#define access(path, mode) x11compatAccess(path, mode)
-#define chdir(path) x11compatChdir(path)
-#define getcwd(buf, size) x11compatGetcwd(buf, size)
-#define unlink(path) x11compatUnlink(path)
-#define rmdir(path) x11compatRmdir(path)
-#define opendir(path) x11compatOpendir(path)
-#define readdir(dir) x11compatReaddir(dir)
-#define closedir(dir) x11compatClosedir(dir)
-#define rewinddir(dir) x11compatRewinddir(dir)
-#ifndef __cplusplus
-#define open(...) x11compatOpen(__VA_ARGS__)
-#define remove(path) x11compatRemove(path)
-#define rename(from, to) x11compatRename(from, to)
 #endif
 
 #endif /* LIBX11_COMPAT_WIN32_X11COMPAT_H */
